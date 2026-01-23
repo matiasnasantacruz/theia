@@ -16,6 +16,7 @@
 
 import '../../src/browser/style/ozw-editor.css';
 import '../../src/browser/style/ozw-toolbox.css';
+import '../../src/browser/style/ozw-properties.css';
 
 import { ContainerModule } from '@theia/core/shared/inversify';
 import { OpenHandler, WidgetFactory, NavigatableWidgetOptions } from '@theia/core/lib/browser';
@@ -23,9 +24,28 @@ import URI from '@theia/core/lib/common/uri';
 import { FileService } from '@theia/filesystem/lib/browser/file-service';
 import { OzwEditorWidget } from './ozw-editor-widget';
 import { OzwToolboxWidget } from './ozw-toolbox-widget';
+import { OzwPropertiesWidget } from './ozw-properties-widget';
 import { OzwOpenHandler } from './ozw-open-handler';
 import { OzwToolboxViewContribution } from './ozw-toolbox-contribution';
 import { bindViewContribution } from '@theia/core/lib/browser/shell/view-contribution';
+import { AbstractViewContribution } from '@theia/core/lib/browser/shell/view-contribution';
+import { injectable } from '@theia/core/shared/inversify';
+
+@injectable()
+class OzwPropertiesViewContribution extends AbstractViewContribution<OzwPropertiesWidget> {
+    constructor() {
+        super({
+            widgetId: OzwPropertiesWidget.ID,
+            widgetName: OzwPropertiesWidget.LABEL,
+            defaultWidgetOptions: {
+                area: 'right',
+                rank: 200
+            },
+            toggleCommandId: 'ozw-properties:toggle',
+            toggleKeybinding: 'ctrlcmd+shift+p'
+        });
+    }
+}
 
 export default new ContainerModule(bind => {
     // Bind OZW Editor Widget Factory with transient scope
@@ -67,4 +87,14 @@ export default new ContainerModule(bind => {
 
     // Bind Toolbox View Contribution
     bindViewContribution(bind, OzwToolboxViewContribution);
+
+    // Bind Properties Widget
+    bind(OzwPropertiesWidget).toSelf().inSingletonScope();
+    bind(WidgetFactory).toDynamicValue(ctx => ({
+        id: OzwPropertiesWidget.ID,
+        createWidget: () => ctx.container.get<OzwPropertiesWidget>(OzwPropertiesWidget)
+    })).inSingletonScope();
+
+    // Bind Properties View Contribution
+    bindViewContribution(bind, OzwPropertiesViewContribution);
 });

@@ -16,5 +16,6 @@
 
 export * from './ozw-editor-widget';
 export * from './ozw-toolbox-widget';
+export * from './ozw-properties-widget';
 export * from './ozw-open-handler';
 export * from './ozw-toolbox-contribution';

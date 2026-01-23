@@ -27,6 +27,8 @@ export interface ToolboxComponent {
 }
 
 const TOOLBOX_COMPONENTS: ToolboxComponent[] = [
+    { type: 'column', label: 'Column', icon: 'fa fa-bars', description: 'Vertical layout container - stacks children vertically' },
+    { type: 'row', label: 'Row', icon: 'fa fa-grip-lines', description: 'Horizontal layout container - arranges children horizontally' },
     { type: 'button', label: 'Button', icon: 'fa fa-hand-pointer', description: 'Clickable button element' },
     { type: 'input', label: 'Input', icon: 'fa fa-keyboard', description: 'Text input field' },
     { type: 'card', label: 'Card', icon: 'fa fa-id-card', description: 'Container card component' },

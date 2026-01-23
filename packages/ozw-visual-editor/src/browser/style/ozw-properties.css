@@ -1,0 +1,95 @@
+/* *****************************************************************************
+ * Copyright (C) 2026 and others.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Eclipse Public License v. 2.0 which is available at
+ * http://www.eclipse.org/legal/epl-2.0.
+ *
+ * This Source Code may also be made available under the following Secondary
+ * Licenses when the conditions for such availability set forth in the Eclipse
+ * Public License v. 2.0 are satisfied: GNU General Public License, version 2
+ * with the GNU Classpath Exception which is available at
+ * https://www.gnu.org/software/classpath/license.html.
+ *
+ * SPDX-License-Identifier: EPL-2.0 OR GPL-2.0-only WITH Classpath-exception-2.0
+ * *****************************************************************************/
+
+.ozw-properties-widget {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    overflow: hidden;
+    background-color: var(--theia-editor-background);
+}
+
+.ozw-properties-empty {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    padding: 24px;
+}
+
+.ozw-properties-empty-content {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+}
+
+.ozw-properties-container {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+}
+
+.ozw-properties-header {
+    padding: 16px;
+    border-bottom: 1px solid var(--theia-border-color);
+    background-color: var(--theia-sideBar-background);
+}
+
+.ozw-properties-header h3 {
+    margin: 0 0 4px 0;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--theia-foreground);
+}
+
+.ozw-properties-type {
+    font-size: 11px;
+    color: var(--theia-descriptionForeground);
+    text-transform: uppercase;
+    font-weight: 500;
+    letter-spacing: 0.5px;
+}
+
+.ozw-properties-content {
+    flex: 1;
+    overflow-y: auto;
+    padding: 12px;
+}
+
+.ozw-property-row {
+    display: flex;
+    flex-direction: column;
+    margin-bottom: 16px;
+}
+
+.ozw-property-label {
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--theia-foreground);
+    margin-bottom: 6px;
+}
+
+.ozw-property-input {
+    width: 100%;
+    font-size: 12px;
+}
+
+.ozw-property-input[type="color"] {
+    height: 32px;
+    padding: 2px;
+    cursor: pointer;
+}
