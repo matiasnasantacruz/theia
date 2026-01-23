@@ -1166,25 +1166,25 @@ export class OzwEditorWidget extends BaseWidget implements Saveable, SaveableSou
 
     protected async updatePropertiesWidget(componentId: string): Promise<void> {
         console.log('🔍 updatePropertiesWidget START for:', componentId);
-        
+
         try {
             // Try to get or create the widget using WidgetManager
             console.log('🆕 Getting or creating widget...');
             const propertiesWidget = await this.widgetManager.getOrCreateWidget<OzwPropertiesWidget>(
                 OzwPropertiesWidget.ID
             );
-            
+
             console.log('📦 Widget obtained:', propertiesWidget ? 'Success' : 'Failed');
             console.log('📦 Widget type:', propertiesWidget?.constructor.name);
 
             if (propertiesWidget) {
                 const component = this._document.components.find(c => c.id === componentId);
                 console.log('🧩 Component found:', component ? `${component.type} (${component.id})` : 'NOT FOUND');
-                
+
                 if (component) {
                     const metadata = this._document.schema.metadata[componentId] || {};
                     console.log('📝 Metadata:', metadata);
-                    
+
                     propertiesWidget.setSelectedComponent(componentId, component.type, metadata);
 
                     // Setup property change listener
@@ -1197,11 +1197,11 @@ export class OzwEditorWidget extends BaseWidget implements Saveable, SaveableSou
                         console.log('➕ Adding widget to shell...');
                         await this.shell.addWidget(propertiesWidget, { area: 'right', rank: 200 });
                     }
-                    
+
                     // Activate the widget
                     console.log('🚀 Activating widget...');
                     await this.shell.activateWidget(propertiesWidget.id);
-                    
+
                     console.log('👁️ Widget visible?', propertiesWidget.isVisible);
                     console.log('📌 Widget attached?', propertiesWidget.isAttached);
                     console.log('✨ Properties widget updated successfully!');
@@ -1212,7 +1212,7 @@ export class OzwEditorWidget extends BaseWidget implements Saveable, SaveableSou
         } catch (error) {
             console.error('💥 Error in updatePropertiesWidget:', error);
         }
-        
+
         console.log('🏁 updatePropertiesWidget END');
     }
 
