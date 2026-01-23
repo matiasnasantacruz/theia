@@ -1,0 +1,117 @@
+/* *****************************************************************************
+ * Copyright (C) 2026 and others.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Eclipse Public License v. 2.0 which is available at
+ * http://www.eclipse.org/legal/epl-2.0.
+ *
+ * This Source Code may also be made available under the following Secondary
+ * Licenses when the conditions for such availability set forth in the Eclipse
+ * Public License v. 2.0 are satisfied: GNU General Public License, version 2
+ * with the GNU Classpath Exception which is available at
+ * https://www.gnu.org/software/classpath/license.html.
+ *
+ * SPDX-License-Identifier: EPL-2.0 OR GPL-2.0-only WITH Classpath-exception-2.0
+ * *****************************************************************************/
+
+.ozw-editor-widget {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    overflow: hidden;
+}
+
+.ozw-mode-toolbar {
+    display: flex;
+    gap: 8px;
+    padding: 8px;
+    background-color: var(--theia-editor-background);
+    border-bottom: 1px solid var(--theia-border-color);
+}
+
+.ozw-mode-button {
+    padding: 6px 12px;
+    font-size: 12px;
+}
+
+.ozw-mode-button:hover {
+    background-color: var(--theia-button-hoverBackground);
+}
+
+.ozw-canvas-container {
+    flex: 1;
+    overflow: auto;
+    padding: 16px;
+    background-color: var(--theia-editor-background);
+    display: none;
+    flex-direction: column;
+}
+
+.ozw-canvas-header {
+    margin-bottom: 16px;
+    text-align: center;
+}
+
+.ozw-canvas-header h3 {
+    margin: 0 0 8px 0;
+    color: var(--theia-foreground);
+}
+
+.ozw-canvas-header p {
+    margin: 0;
+    color: var(--theia-descriptionForeground);
+    font-size: 13px;
+}
+
+.ozw-canvas-workspace {
+    flex: 1;
+    position: relative;
+    min-height: 400px;
+}
+
+.ozw-text-editor-container {
+    flex: 1;
+    overflow: hidden;
+    display: none;
+}
+
+.ozw-component {
+    position: absolute;
+    padding: 8px;
+    cursor: move;
+    user-select: none;
+    transition: box-shadow 0.2s;
+}
+
+.ozw-component:hover {
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+
+.ozw-component button,
+.ozw-component input {
+    pointer-events: none;
+}
+
+.ozw-card {
+    padding: 12px;
+}
+
+.ozw-card h4 {
+    margin: 0 0 8px 0;
+    font-size: 14px;
+    font-weight: 600;
+}
+
+.ozw-card p {
+    margin: 0;
+    font-size: 12px;
+    color: var(--theia-descriptionForeground);
+}
+
+#ozw-split-panel {
+    flex: 1;
+}
+
+#ozw-split-panel .lm-Widget {
+    overflow: auto;
+}

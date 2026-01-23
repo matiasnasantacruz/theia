@@ -1,0 +1,32 @@
+{
+  "version": "1.0",
+  "components": [
+    {
+      "type": "button",
+      "id": "btn1",
+      "properties": {
+        "x": 100,
+        "y": 80,
+        "label": "Hello World"
+      }
+    },
+    {
+      "type": "input",
+      "id": "input1",
+      "properties": {
+        "x": 100,
+        "y": 150,
+        "label": "Enter your name"
+      }
+    },
+    {
+      "type": "card",
+      "id": "card1",
+      "properties": {
+        "x": 300,
+        "y": 80,
+        "label": "Welcome Card"
+      }
+    }
+  ]
+}

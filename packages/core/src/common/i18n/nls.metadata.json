@@ -32875,7 +32875,7 @@
 			"You have not yet opened a folder.\n{0}\n{1}",
 			"Connected to remote.\n{0}",
 			"You have not yet opened a folder.\n{0}\nOpening a folder will close all currently open editors. To keep them open, {1} instead.",
-			"You have not yet opened a folder.\n{0}",
+			"Debes abrir un proyecto de ozrical.\n{0}",
 			"Folders",
 			"Explorer",
 			"Explorer"

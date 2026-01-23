@@ -1407,7 +1407,7 @@ export class ApplicationShell extends Widget {
         return widget;
     }
 
-    private readonly activationTimeout = 2000;
+    private readonly activationTimeout = 10000;
     private readonly toDisposeOnActivationCheck = new DisposableCollection();
     private assertActivated(widget: Widget): void {
         this.toDisposeOnActivationCheck.dispose();

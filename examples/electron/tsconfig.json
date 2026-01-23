@@ -147,6 +147,9 @@
       "path": "../../packages/output"
     },
     {
+      "path": "../../packages/ozw-visual-editor"
+    },
+    {
       "path": "../../packages/plugin-dev"
     },
     {

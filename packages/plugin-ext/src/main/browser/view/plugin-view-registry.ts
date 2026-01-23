@@ -180,7 +180,7 @@ export class PluginViewRegistry implements FrontendApplicationContribution {
                 disposable.push(this.registerViewWelcome({
                     view: 'explorer',
                     content: nls.localizeByDefault(
-                        'You have not yet opened a folder.\n{0}',
+                        'Debes abrir un proyecto de ozrical.\n{0}',
                         `[${nls.localizeByDefault('Open Folder')}](command:workbench.action.files.openFolder)`
                     ),
                     order: 0
