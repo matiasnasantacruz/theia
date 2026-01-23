@@ -307,9 +307,19 @@ export class OzwEditorWidget extends BaseWidget implements Saveable, SaveableSou
         workspace.style.gap = '0';
 
         // Setup drop handlers ONLY on the workspace (not on individual components)
-        workspace.addEventListener('dragover', (e) => this.handleCanvasDragOver(e));
-        workspace.addEventListener('drop', (e) => this.handleCanvasDrop(e));
-        workspace.addEventListener('dragleave', (e) => this.handleCanvasDragLeave(e));
+        workspace.addEventListener('dragover', (e) => this.handleDragOver(e));
+        workspace.addEventListener('drop', (e) => this.handleDrop(e));
+        workspace.addEventListener('dragleave', (e) => this.handleDragLeave(e));
+
+        // Click handler to deselect when clicking on empty space
+        workspace.addEventListener('click', (e) => {
+            // Only deselect if clicking directly on workspace (empty area)
+            if (e.target === workspace) {
+                this._selectedComponentId = null;
+                this.renderCanvas();
+            }
+            // Don't stop propagation - let child elements handle their own clicks
+        });
 
         // Render hierarchical tree
         if (this._document.schema.tree.length === 0) {
@@ -347,14 +357,44 @@ export class OzwEditorWidget extends BaseWidget implements Saveable, SaveableSou
         // Setup drag handlers
         element.addEventListener('dragstart', (e) => this.handleComponentDragStart(e, node.id));
         element.addEventListener('dragend', (e) => this.handleComponentDragEnd(e));
+        element.addEventListener('dragover', (e) => this.handleDragOver(e));
+        element.addEventListener('drop', (e) => this.handleDrop(e));
+        element.addEventListener('dragleave', (e) => this.handleDragLeave(e));
         element.addEventListener('click', (e) => {
-            e.stopPropagation();
-            e.stopImmediatePropagation(); // Stop ALL propagation
-            this.selectComponent(node.id);
+            const target = e.target as HTMLElement;
+
+            console.log('CLICK EVENT:', {
+                target: target,
+                targetClass: target.className,
+                currentTarget: e.currentTarget,
+                element: element,
+                elementId: element.getAttribute('data-component-id'),
+                elementType: element.getAttribute('data-component-type')
+            });
+
+            // Find the closest component element (could be this element or a child component)
+            let closestComponent = target.closest('.ozw-component') as HTMLElement;
+
+            console.log('CLOSEST COMPONENT:', {
+                closestComponent: closestComponent,
+                closestId: closestComponent?.getAttribute('data-component-id'),
+                isSameAsElement: closestComponent === element
+            });
+
+            // If the closest component is THIS element, select it
+            if (closestComponent === element) {
+                console.log('SELECTING:', node.id);
+                e.stopPropagation(); // Stop so parent containers don't get selected
+                this.selectComponent(node.id);
+            } else {
+                console.log('NOT SELECTING, letting propagate');
+            }
+            // Otherwise, let the event propagate to the child component
         });
 
         // Apply container-specific styles
         if (node.type === 'column') {
+            element.style.position = 'relative';
             element.style.display = 'flex';
             element.style.flexDirection = 'column';
             element.style.gap = '8px';
@@ -376,6 +416,7 @@ export class OzwEditorWidget extends BaseWidget implements Saveable, SaveableSou
             label.style.pointerEvents = 'none';
             element.appendChild(label);
         } else if (node.type === 'row') {
+            element.style.position = 'relative';
             element.style.display = 'flex';
             element.style.flexDirection = 'row';
             element.style.gap = '12px';
@@ -398,6 +439,7 @@ export class OzwEditorWidget extends BaseWidget implements Saveable, SaveableSou
             element.appendChild(label);
         } else {
             // Leaf components (button, input, text, image, etc.)
+            element.style.position = 'relative';
             element.style.padding = '8px 16px';
             element.style.cursor = 'move';
             this.renderLeafComponent(element, node.type, metadata);
@@ -419,6 +461,7 @@ export class OzwEditorWidget extends BaseWidget implements Saveable, SaveableSou
             placeholder.style.color = '#999';
             placeholder.style.fontSize = '12px';
             placeholder.style.fontStyle = 'italic';
+            placeholder.style.pointerEvents = 'none'; // Let clicks pass through to parent
             element.appendChild(placeholder);
         }
 
@@ -599,12 +642,6 @@ export class OzwEditorWidget extends BaseWidget implements Saveable, SaveableSou
     }
 
     // Drag and Drop Handlers
-    protected setupDropHandlers(element: HTMLElement): void {
-        element.addEventListener('dragover', (e) => this.handleDragOver(e));
-        element.addEventListener('drop', (e) => this.handleDrop(e));
-        element.addEventListener('dragleave', (e) => this.handleDragLeave(e));
-    }
-
     protected handleDragOver(event: DragEvent): void {
         event.preventDefault();
         event.stopPropagation(); // CRITICAL: Stop bubbling so only the closest element handles it
@@ -617,10 +654,15 @@ export class OzwEditorWidget extends BaseWidget implements Saveable, SaveableSou
     }
 
     protected handleDragLeave(event: DragEvent): void {
-        event.preventDefault();
-        event.stopPropagation();
-
+        // Only remove highlight if we're actually leaving the element
         const target = event.currentTarget as HTMLElement;
+        const relatedTarget = event.relatedTarget as HTMLElement;
+
+        // Don't remove highlight if we're moving to a child element
+        if (relatedTarget && target.contains(relatedTarget)) {
+            return;
+        }
+
         target.classList.remove('ozw-drop-target');
     }
 

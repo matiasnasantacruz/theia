@@ -141,11 +141,14 @@
     border-radius: 4px;
 }
 
-.ozw-component button,
-.ozw-component input,
-.ozw-component p,
-.ozw-component div {
-    pointer-events: none;
+/* Allow pointer events on child components */
+.ozw-component .ozw-component {
+    pointer-events: auto;
+}
+
+/* Allow pointer events on delete button */
+.ozw-delete-button {
+    pointer-events: auto !important;
 }
 
 .ozw-card {
