@@ -83,10 +83,10 @@ export class OzwEditorWidget extends BaseWidget implements Saveable, SaveableSou
     protected modeToolbar: HTMLDivElement;
 
     protected _mode: OzwEditorMode = 'canvas';
-    protected _document: OzwDocument = { 
-        version: '1.0', 
-        components: [], 
-        schema: { tree: [], metadata: {} } 
+    protected _document: OzwDocument = {
+        version: '1.0',
+        components: [],
+        schema: { tree: [], metadata: {} }
     };
     protected _dirty = false;
     protected _uri: URI;
@@ -158,10 +158,10 @@ export class OzwEditorWidget extends BaseWidget implements Saveable, SaveableSou
             }
         } catch (e) {
             console.error('Failed to parse OZW document:', e);
-            this._document = { 
-                version: '1.0', 
-                components: [], 
-                schema: { tree: [], metadata: {} } 
+            this._document = {
+                version: '1.0',
+                components: [],
+                schema: { tree: [], metadata: {} }
             };
         }
 
@@ -185,28 +185,36 @@ export class OzwEditorWidget extends BaseWidget implements Saveable, SaveableSou
         this.addClass('ozw-editor-widget');
         this.toDispose.push(this.toDisposeOnEditor);
         this.toDispose.push(this.onDirtyChangedEmitter);
-        
+
         // Make widget focusable immediately before anything else
         this.node.tabIndex = 0;
         // Ensure focus can be received immediately
         this.node.setAttribute('aria-label', 'OZW Visual Editor');
 
+        // Add keyboard listener for delete
+        this.node.addEventListener('keydown', (e) => {
+            if ((e.key === 'Delete' || e.key === 'Backspace') && this._selectedComponentId) {
+                e.preventDefault();
+                this.deleteComponent(this._selectedComponentId);
+            }
+        });
+
         // Create mode toolbar
         this.modeToolbar = document.createElement('div');
         this.modeToolbar.className = 'ozw-mode-toolbar';
-        
+
         const canvasBtn = this.createToolbarButton('Canvas', 'canvas');
         const textBtn = this.createToolbarButton('Text', 'text');
         const splitBtn = this.createToolbarButton('Split', 'split');
-        
+
         this.modeToolbar.appendChild(canvasBtn);
         this.modeToolbar.appendChild(textBtn);
         this.modeToolbar.appendChild(splitBtn);
-        
+
         // Create canvas container
         this.canvasContainer = document.createElement('div');
         this.canvasContainer.className = 'ozw-canvas-container';
-        
+
         // Create text editor container
         this.textEditorContainer = document.createElement('div');
         this.textEditorContainer.className = 'ozw-text-editor-container';
@@ -217,7 +225,7 @@ export class OzwEditorWidget extends BaseWidget implements Saveable, SaveableSou
 
         this.updateLayout();
     }
-    
+
     protected override onActivateRequest(msg: Message): void {
         super.onActivateRequest(msg);
         // Simply focus the node - it's already focusable with tabIndex=0
@@ -236,7 +244,7 @@ export class OzwEditorWidget extends BaseWidget implements Saveable, SaveableSou
         // Hide all containers first
         this.canvasContainer.style.display = 'none';
         this.textEditorContainer.style.display = 'none';
-        
+
         // Dispose split panel if exists
         if (this.splitPanel) {
             this.splitPanel.dispose();
@@ -282,7 +290,7 @@ export class OzwEditorWidget extends BaseWidget implements Saveable, SaveableSou
 
     protected renderCanvas(): void {
         this.canvasContainer.innerHTML = '';
-        
+
         // Create canvas header
         const header = document.createElement('div');
         header.className = 'ozw-canvas-header';
@@ -298,8 +306,10 @@ export class OzwEditorWidget extends BaseWidget implements Saveable, SaveableSou
         workspace.style.flexDirection = 'column';
         workspace.style.gap = '0';
 
-        // Setup drop handlers
-        this.setupDropHandlers(workspace);
+        // Setup drop handlers ONLY on the workspace (not on individual components)
+        workspace.addEventListener('dragover', (e) => this.handleCanvasDragOver(e));
+        workspace.addEventListener('drop', (e) => this.handleCanvasDrop(e));
+        workspace.addEventListener('dragleave', (e) => this.handleCanvasDragLeave(e));
 
         // Render hierarchical tree
         if (this._document.schema.tree.length === 0) {
@@ -339,6 +349,7 @@ export class OzwEditorWidget extends BaseWidget implements Saveable, SaveableSou
         element.addEventListener('dragend', (e) => this.handleComponentDragEnd(e));
         element.addEventListener('click', (e) => {
             e.stopPropagation();
+            e.stopImmediatePropagation(); // Stop ALL propagation
             this.selectComponent(node.id);
         });
 
@@ -350,9 +361,10 @@ export class OzwEditorWidget extends BaseWidget implements Saveable, SaveableSou
             element.style.padding = '12px';
             element.style.border = '2px dashed #007acc';
             element.style.borderRadius = '4px';
-            element.style.minHeight = '60px';
+            element.style.minHeight = '100px';
+            element.style.minWidth = '100px';
             element.style.backgroundColor = 'rgba(0, 122, 204, 0.05)';
-            
+
             // Add label for column
             const label = document.createElement('div');
             label.className = 'ozw-container-label';
@@ -361,9 +373,8 @@ export class OzwEditorWidget extends BaseWidget implements Saveable, SaveableSou
             label.style.color = '#007acc';
             label.style.fontWeight = 'bold';
             label.style.marginBottom = '4px';
+            label.style.pointerEvents = 'none';
             element.appendChild(label);
-            
-            this.setupDropHandlers(element);
         } else if (node.type === 'row') {
             element.style.display = 'flex';
             element.style.flexDirection = 'row';
@@ -371,9 +382,10 @@ export class OzwEditorWidget extends BaseWidget implements Saveable, SaveableSou
             element.style.padding = '12px';
             element.style.border = '2px dashed #10a37f';
             element.style.borderRadius = '4px';
-            element.style.minHeight = '60px';
+            element.style.minHeight = '100px';
+            element.style.minWidth = '100px';
             element.style.backgroundColor = 'rgba(16, 163, 127, 0.05)';
-            
+
             // Add label for row
             const label = document.createElement('div');
             label.className = 'ozw-container-label';
@@ -381,10 +393,9 @@ export class OzwEditorWidget extends BaseWidget implements Saveable, SaveableSou
             label.style.fontSize = '11px';
             label.style.color = '#10a37f';
             label.style.fontWeight = 'bold';
-            label.style.marginRight = '8px';
+            label.style.marginBottom = '4px';
+            label.style.pointerEvents = 'none';
             element.appendChild(label);
-            
-            this.setupDropHandlers(element);
         } else {
             // Leaf components (button, input, text, image, etc.)
             element.style.padding = '8px 16px';
@@ -414,6 +425,35 @@ export class OzwEditorWidget extends BaseWidget implements Saveable, SaveableSou
         // Highlight if selected
         if (this._selectedComponentId === node.id) {
             element.classList.add('ozw-selected');
+
+            // Add delete button
+            const deleteBtn = document.createElement('button');
+            deleteBtn.className = 'ozw-delete-button';
+            deleteBtn.innerHTML = '<i class="fa fa-times"></i>';
+            deleteBtn.title = 'Delete component (or press Delete key)';
+            deleteBtn.style.position = 'absolute';
+            deleteBtn.style.top = '-10px';
+            deleteBtn.style.right = '-10px';
+            deleteBtn.style.width = '24px';
+            deleteBtn.style.height = '24px';
+            deleteBtn.style.borderRadius = '50%';
+            deleteBtn.style.border = 'none';
+            deleteBtn.style.backgroundColor = '#e74c3c';
+            deleteBtn.style.color = 'white';
+            deleteBtn.style.cursor = 'pointer';
+            deleteBtn.style.display = 'flex';
+            deleteBtn.style.alignItems = 'center';
+            deleteBtn.style.justifyContent = 'center';
+            deleteBtn.style.fontSize = '12px';
+            deleteBtn.style.zIndex = '1000';
+            deleteBtn.style.boxShadow = '0 2px 4px rgba(0,0,0,0.3)';
+            deleteBtn.onclick = (e) => {
+                e.stopPropagation();
+                this.deleteComponent(node.id);
+            };
+            deleteBtn.onmouseenter = () => deleteBtn.style.backgroundColor = '#c0392b';
+            deleteBtn.onmouseleave = () => deleteBtn.style.backgroundColor = '#e74c3c';
+            element.appendChild(deleteBtn);
         }
 
         return element;
@@ -551,7 +591,7 @@ export class OzwEditorWidget extends BaseWidget implements Saveable, SaveableSou
             this.title.caption = uri.path.fsPath();
             this.title.closable = true;
             this.title.iconClass = 'fa fa-cube';
-            
+
             if (oldState.mode) {
                 this._mode = oldState.mode;
             }
@@ -567,24 +607,19 @@ export class OzwEditorWidget extends BaseWidget implements Saveable, SaveableSou
 
     protected handleDragOver(event: DragEvent): void {
         event.preventDefault();
-        event.stopPropagation();
-        
+        event.stopPropagation(); // CRITICAL: Stop bubbling so only the closest element handles it
+
         const target = event.currentTarget as HTMLElement;
-        
-        // Check if this is a valid drop target
-        if (target.classList.contains('ozw-canvas-workspace') || 
-            target.classList.contains('ozw-component-column') || 
-            target.classList.contains('ozw-component-row')) {
-            
-            event.dataTransfer!.dropEffect = 'copy';
-            target.classList.add('ozw-drop-target');
-        }
+
+        // All components and canvas are valid drop targets
+        event.dataTransfer!.dropEffect = 'copy';
+        target.classList.add('ozw-drop-target');
     }
 
     protected handleDragLeave(event: DragEvent): void {
         event.preventDefault();
         event.stopPropagation();
-        
+
         const target = event.currentTarget as HTMLElement;
         target.classList.remove('ozw-drop-target');
     }
@@ -592,24 +627,94 @@ export class OzwEditorWidget extends BaseWidget implements Saveable, SaveableSou
     protected handleDrop(event: DragEvent): void {
         event.preventDefault();
         event.stopPropagation();
-        
+
         const target = event.currentTarget as HTMLElement;
         target.classList.remove('ozw-drop-target');
-        
+
+        // Find the actual element under the mouse (not just the event target)
+        const actualTarget = this.findDropTarget(event);
+
         // Get component data from toolbox
         const componentDataStr = event.dataTransfer?.getData('application/ozw-component');
         if (componentDataStr) {
             const componentData = JSON.parse(componentDataStr);
-            this.addComponentToTarget(componentData.type, target);
+            this.addComponentToTarget(componentData.type, actualTarget);
         } else if (this._draggedComponentId) {
             // Moving existing component
-            this.moveComponentToTarget(this._draggedComponentId, target);
+            this.moveComponentToTarget(this._draggedComponentId, actualTarget);
         }
+    }
+
+    protected findDropTarget(event: DragEvent): HTMLElement {
+        // Get all elements under mouse pointer
+        const elementsUnderMouse = document.elementsFromPoint(event.clientX, event.clientY);
+
+        let smallestComponent: HTMLElement | null = null;
+        let smallestArea = Infinity;
+
+        // Find the SMALLEST component (most specific target)
+        for (const element of elementsUnderMouse) {
+            if (element instanceof HTMLElement) {
+                // Skip labels and placeholders
+                if (element.classList.contains('ozw-container-label') ||
+                    element.classList.contains('ozw-container-placeholder') ||
+                    element.classList.contains('ozw-delete-button')) {
+                    continue;
+                }
+
+                // Check if it's a valid component
+                if (element.classList.contains('ozw-component')) {
+                    // Calculate area to find the smallest (most specific) one
+                    const rect = element.getBoundingClientRect();
+                    const area = rect.width * rect.height;
+
+                    if (area < smallestArea) {
+                        smallestArea = area;
+                        smallestComponent = element;
+                    }
+                }
+
+                // Check for canvas workspace as fallback
+                if (!smallestComponent && element.classList.contains('ozw-canvas-workspace')) {
+                    return element;
+                }
+            }
+        }
+
+        if (smallestComponent) {
+            console.log('Found smallest component:', {
+                id: smallestComponent.getAttribute('data-component-id'),
+                type: smallestComponent.getAttribute('data-component-type'),
+                area: smallestArea
+            });
+            return smallestComponent;
+        }
+
+        // Fallback: search upwards from the event target
+        let current = event.target as HTMLElement | null;
+        while (current) {
+            if (current.classList.contains('ozw-component') ||
+                current.classList.contains('ozw-canvas-workspace')) {
+                return current;
+            }
+            current = current.parentElement;
+        }
+
+        // Last fallback to currentTarget
+        return event.currentTarget as HTMLElement;
     }
 
     protected addComponentToTarget(type: string, targetElement: HTMLElement): void {
         const targetId = targetElement.getAttribute('data-component-id');
-        
+        const targetType = targetElement.getAttribute('data-component-type');
+
+        console.log('Drop target:', {
+            element: targetElement,
+            id: targetId,
+            type: targetType,
+            classList: Array.from(targetElement.classList)
+        });
+
         // Validate drop target
         if (targetElement.classList.contains('ozw-canvas-workspace')) {
             // Dropping on root canvas
@@ -620,45 +725,74 @@ export class OzwEditorWidget extends BaseWidget implements Saveable, SaveableSou
                     return;
                 }
             }
-            
+
             // Add to root
+            console.log('Adding to root');
             this.addComponent(type, null);
-        } else if (targetId) {
-            // Dropping inside a container
-            const targetType = targetElement.getAttribute('data-component-type');
-            if (!this.canHaveChildren(targetType || '')) {
-                console.warn('Cannot drop inside non-container component');
-                return;
+        } else if (targetId && targetType) {
+            // Check if target is a layout container
+            if (this.canHaveChildren(targetType)) {
+                // Target IS a layout (Column/Row) - drop INSIDE it
+                console.log('Adding INSIDE layout', targetType, targetId);
+                this.addComponent(type, targetId);
+            } else {
+                // Target is NOT a layout - drop in its PARENT container
+                const parentId = this.findParentId(targetId);
+                console.log('Target is not a layout, adding to parent:', parentId);
+                if (parentId) {
+                    this.addComponent(type, parentId);
+                } else {
+                    // No parent found, add to root
+                    console.log('No parent found, adding to root');
+                    this.addComponent(type, null);
+                }
             }
-            
-            this.addComponent(type, targetId);
         }
+    }
+
+    protected findParentId(childId: string): string | null {
+        const findInTree = (nodes: TreeNode[], parentId: string | null = null): string | null => {
+            for (const node of nodes) {
+                if (node.id === childId) {
+                    return parentId;
+                }
+                if (node.children) {
+                    const found = findInTree(node.children, node.id);
+                    if (found !== null) {
+                        return found;
+                    }
+                }
+            }
+            return null;
+        };
+
+        return findInTree(this._document.schema.tree);
     }
 
     protected addComponent(type: string, parentId: string | null): void {
         // Generate unique ID
         const id = `${type}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-        
+
         // Create component
         const component: OzwComponent = {
             id,
             type,
             properties: {
-                label: type === 'column' ? 'Columna' : 
-                       type === 'row' ? 'Fila' : 
-                       `${type.charAt(0).toUpperCase()}${type.slice(1)}`
+                label: type === 'column' ? 'Columna' :
+                    type === 'row' ? 'Fila' :
+                        `${type.charAt(0).toUpperCase()}${type.slice(1)}`
             }
         };
-        
+
         // Add to components array
         this._document.components.push(component);
-        
+
         // Update metadata
         this._document.schema.metadata[id] = component.properties;
-        
+
         // Update tree
         const newNode: TreeNode = { id, type, children: this.canHaveChildren(type) ? [] : undefined };
-        
+
         if (parentId === null) {
             // Add to root
             this._document.schema.tree.push(newNode);
@@ -666,7 +800,7 @@ export class OzwEditorWidget extends BaseWidget implements Saveable, SaveableSou
             // Add to parent
             this.addNodeToParent(newNode, parentId, this._document.schema.tree);
         }
-        
+
         // Mark as dirty and re-render
         this.dirty = true;
         this.syncToText();
@@ -694,7 +828,7 @@ export class OzwEditorWidget extends BaseWidget implements Saveable, SaveableSou
         this._draggedComponentId = componentId;
         event.dataTransfer!.effectAllowed = 'move';
         event.dataTransfer!.setData('application/ozw-component-id', componentId);
-        
+
         const target = event.currentTarget as HTMLElement;
         target.style.opacity = '0.5';
     }
@@ -703,7 +837,7 @@ export class OzwEditorWidget extends BaseWidget implements Saveable, SaveableSou
         this._draggedComponentId = null;
         const target = event.currentTarget as HTMLElement;
         target.style.opacity = '1';
-        
+
         // Remove all drop target highlights
         document.querySelectorAll('.ozw-drop-target').forEach(el => {
             el.classList.remove('ozw-drop-target');
@@ -712,33 +846,80 @@ export class OzwEditorWidget extends BaseWidget implements Saveable, SaveableSou
 
     protected moveComponentToTarget(componentId: string, targetElement: HTMLElement): void {
         const targetId = targetElement.getAttribute('data-component-id');
-        
-        // Don't allow dropping on self or children
+        const targetType = targetElement.getAttribute('data-component-type');
+
+        // Don't allow dropping on self
         if (componentId === targetId) {
             return;
         }
-        
+
+        // Don't allow dropping a parent into its own child (would create a loop)
+        if (targetId && this.isDescendant(targetId, componentId)) {
+            console.warn('Cannot move a parent into its own descendant');
+            return;
+        }
+
         // Remove from current location
         const node = this.removeNodeFromTree(componentId, this._document.schema.tree);
         if (!node) {
             return;
         }
-        
+
         // Add to new location
         if (targetElement.classList.contains('ozw-canvas-workspace')) {
+            // Dropped on root canvas
             this._document.schema.tree.push(node);
-        } else if (targetId) {
-            const targetType = targetElement.getAttribute('data-component-type');
-            if (!this.canHaveChildren(targetType || '')) {
-                // Restore to original location if invalid
-                return;
+        } else if (targetId && targetType) {
+            // Check if target is a layout container
+            if (this.canHaveChildren(targetType)) {
+                // Target IS a layout - move INSIDE it
+                this.addNodeToParent(node, targetId, this._document.schema.tree);
+            } else {
+                // Target is NOT a layout - move to its PARENT
+                const parentId = this.findParentId(targetId);
+                if (parentId) {
+                    this.addNodeToParent(node, parentId, this._document.schema.tree);
+                } else {
+                    // No parent, add to root
+                    this._document.schema.tree.push(node);
+                }
             }
-            this.addNodeToParent(node, targetId, this._document.schema.tree);
         }
-        
+
         this.dirty = true;
         this.syncToText();
         this.renderCanvas();
+    }
+
+    protected isDescendant(potentialDescendantId: string, ancestorId: string): boolean {
+        const checkNode = (node: TreeNode): boolean => {
+            if (node.id === potentialDescendantId) {
+                return true;
+            }
+            if (node.children) {
+                return node.children.some(child => checkNode(child));
+            }
+            return false;
+        };
+
+        // Find the ancestor node
+        const findNode = (nodes: TreeNode[]): TreeNode | null => {
+            for (const node of nodes) {
+                if (node.id === ancestorId) {
+                    return node;
+                }
+                if (node.children) {
+                    const found = findNode(node.children);
+                    if (found) return found;
+                }
+            }
+            return null;
+        };
+
+        const ancestorNode = findNode(this._document.schema.tree);
+        if (!ancestorNode) return false;
+
+        return checkNode(ancestorNode);
     }
 
     protected removeNodeFromTree(nodeId: string, tree: TreeNode[]): TreeNode | null {
@@ -760,7 +941,7 @@ export class OzwEditorWidget extends BaseWidget implements Saveable, SaveableSou
     protected selectComponent(componentId: string): void {
         this._selectedComponentId = componentId;
         this.renderCanvas();
-        
+
         // Update properties widget
         this.updatePropertiesWidget(componentId);
     }
@@ -772,7 +953,7 @@ export class OzwEditorWidget extends BaseWidget implements Saveable, SaveableSou
             if (component) {
                 const metadata = this._document.schema.metadata[componentId] || {};
                 propertiesWidget.setSelectedComponent(componentId, component.type, metadata);
-                
+
                 // Setup property change listener
                 propertiesWidget.onPropertyChange((event) => {
                     this.handlePropertyChange(event.componentId, event.property, event.value);
@@ -787,16 +968,40 @@ export class OzwEditorWidget extends BaseWidget implements Saveable, SaveableSou
             this._document.schema.metadata[componentId] = {};
         }
         this._document.schema.metadata[componentId][property] = value;
-        
+
         // Update component properties
         const component = this._document.components.find(c => c.id === componentId);
         if (component) {
             component.properties[property] = value;
         }
-        
+
         // Mark as dirty and re-render
         this.dirty = true;
         this.syncToText();
         this.renderCanvas();
+    }
+
+    protected deleteComponent(componentId: string): void {
+        // Remove from components array
+        const componentIndex = this._document.components.findIndex(c => c.id === componentId);
+        if (componentIndex !== -1) {
+            this._document.components.splice(componentIndex, 1);
+        }
+
+        // Remove from metadata
+        delete this._document.schema.metadata[componentId];
+
+        // Remove from tree
+        this.removeNodeFromTree(componentId, this._document.schema.tree);
+
+        // Clear selection
+        this._selectedComponentId = null;
+
+        // Mark as dirty and re-render
+        this.dirty = true;
+        this.syncToText();
+        this.renderCanvas();
+
+        console.log('Component deleted:', componentId);
     }
 }

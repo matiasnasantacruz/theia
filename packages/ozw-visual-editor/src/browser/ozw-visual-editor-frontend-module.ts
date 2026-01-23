@@ -56,7 +56,7 @@ export default new ContainerModule(bind => {
             // Create a new widget instance
             const widget = ctx.container.get<OzwEditorWidget>(OzwEditorWidget);
             const uri = new URI(options.uri);
-            
+
             // Load file content for initialization
             const fileService = ctx.container.get<FileService>(FileService);
             let content = '';
@@ -67,7 +67,7 @@ export default new ContainerModule(bind => {
                 console.warn('Could not read file, creating new document', e);
                 content = '{"version":"1.0","components":[]}';
             }
-            
+
             // Initialize the widget with URI and content
             await widget.initialize(uri, content);
             return widget;

@@ -42,7 +42,7 @@ export class OzwToolboxWidget extends BaseWidget {
 
     static readonly ID = 'ozw-toolbox';
     static readonly LABEL = 'Component Toolbox';
-    
+
     private root: Root | undefined;
 
     @postConstruct()
@@ -70,7 +70,7 @@ export class OzwToolboxWidget extends BaseWidget {
         }
         this.root.render(<React.Fragment>{this.render()}</React.Fragment>);
     }
-    
+
     override dispose(): void {
         if (this.root) {
             this.root.unmount();
@@ -118,7 +118,7 @@ export class OzwToolboxWidget extends BaseWidget {
     protected handleDragStart(event: React.DragEvent<HTMLDivElement>, component: ToolboxComponent): void {
         event.dataTransfer.effectAllowed = 'copy';
         event.dataTransfer.setData('application/ozw-component', JSON.stringify(component));
-        
+
         // Create a visual drag image
         const dragImage = document.createElement('div');
         dragImage.className = 'ozw-drag-preview';
@@ -132,7 +132,7 @@ export class OzwToolboxWidget extends BaseWidget {
         dragImage.style.fontSize = '12px';
         document.body.appendChild(dragImage);
         event.dataTransfer.setDragImage(dragImage, 0, 0);
-        
+
         // Clean up drag image after drag starts
         setTimeout(() => {
             document.body.removeChild(dragImage);

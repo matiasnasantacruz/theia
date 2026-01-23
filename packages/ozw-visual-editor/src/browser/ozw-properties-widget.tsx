@@ -31,7 +31,7 @@ export class OzwPropertiesWidget extends BaseWidget {
 
     static readonly ID = 'ozw-properties';
     static readonly LABEL = 'Properties';
-    
+
     private root: Root | undefined;
     private selectedComponentId: string | null = null;
     private selectedComponentType: string | null = null;
@@ -63,7 +63,7 @@ export class OzwPropertiesWidget extends BaseWidget {
         }
         this.root.render(<React.Fragment>{this.render()}</React.Fragment>);
     }
-    
+
     override dispose(): void {
         if (this.root) {
             this.root.unmount();
@@ -110,8 +110,8 @@ export class OzwPropertiesWidget extends BaseWidget {
 
     protected getComponentDisplayName(): string {
         const type = this.selectedComponentType || 'Component';
-        return this.selectedComponentMetadata.label as string || 
-               (type.charAt(0).toUpperCase() + type.slice(1));
+        return this.selectedComponentMetadata.label as string ||
+            (type.charAt(0).toUpperCase() + type.slice(1));
     }
 
     protected renderProperties(): React.ReactNode {
