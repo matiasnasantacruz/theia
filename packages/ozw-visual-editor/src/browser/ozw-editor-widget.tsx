@@ -94,6 +94,8 @@ export class OzwEditorWidget extends BaseWidget implements Saveable, SaveableSou
     protected _isInitialized = false;
     protected _selectedComponentId: string | null = null;
     protected _draggedComponentId: string | null = null;
+    protected _dropIndicator: HTMLDivElement | null = null;
+    protected _dropPosition: 'before' | 'after' | 'inside' | null = null;
 
     get uri(): URI {
         return this._uri;
@@ -644,13 +646,40 @@ export class OzwEditorWidget extends BaseWidget implements Saveable, SaveableSou
     // Drag and Drop Handlers
     protected handleDragOver(event: DragEvent): void {
         event.preventDefault();
-        event.stopPropagation(); // CRITICAL: Stop bubbling so only the closest element handles it
+        event.stopPropagation();
 
         const target = event.currentTarget as HTMLElement;
+        const targetId = target.getAttribute('data-component-id');
+        const targetType = target.getAttribute('data-component-type');
 
-        // All components and canvas are valid drop targets
-        event.dataTransfer!.dropEffect = 'copy';
-        target.classList.add('ozw-drop-target');
+        // Don't show indicator if dragging over self
+        if (targetId === this._draggedComponentId) {
+            this.removeDropIndicator();
+            return;
+        }
+
+        // Determine drop effect
+        if (this._draggedComponentId) {
+            event.dataTransfer!.dropEffect = 'move';
+        } else {
+            event.dataTransfer!.dropEffect = 'copy';
+        }
+
+        // Show drop indicator
+        if (targetType && this.canHaveChildren(targetType)) {
+            // Container - show inside indicator
+            this._dropPosition = 'inside';
+            target.classList.add('ozw-drop-target');
+            this.removeDropIndicator();
+        } else if (targetId) {
+            // Leaf component - show swap/insert indicator
+            this.showDropIndicator(target, event);
+            target.classList.remove('ozw-drop-target');
+        } else {
+            // Workspace
+            target.classList.add('ozw-drop-target');
+            this.removeDropIndicator();
+        }
     }
 
     protected handleDragLeave(event: DragEvent): void {
@@ -664,6 +693,7 @@ export class OzwEditorWidget extends BaseWidget implements Saveable, SaveableSou
         }
 
         target.classList.remove('ozw-drop-target');
+        this.removeDropIndicator();
     }
 
     protected handleDrop(event: DragEvent): void {
@@ -672,6 +702,7 @@ export class OzwEditorWidget extends BaseWidget implements Saveable, SaveableSou
 
         const target = event.currentTarget as HTMLElement;
         target.classList.remove('ozw-drop-target');
+        this.removeDropIndicator();
 
         // Find the actual element under the mouse (not just the event target)
         const actualTarget = this.findDropTarget(event);
@@ -685,6 +716,9 @@ export class OzwEditorWidget extends BaseWidget implements Saveable, SaveableSou
             // Moving existing component
             this.moveComponentToTarget(this._draggedComponentId, actualTarget);
         }
+        
+        // Clear drop position AFTER using it
+        this._dropPosition = null;
     }
 
     protected findDropTarget(event: DragEvent): HTMLElement {
@@ -877,6 +911,7 @@ export class OzwEditorWidget extends BaseWidget implements Saveable, SaveableSou
 
     protected handleComponentDragEnd(event: DragEvent): void {
         this._draggedComponentId = null;
+        this._dropPosition = null;
         const target = event.currentTarget as HTMLElement;
         target.style.opacity = '1';
 
@@ -884,6 +919,68 @@ export class OzwEditorWidget extends BaseWidget implements Saveable, SaveableSou
         document.querySelectorAll('.ozw-drop-target').forEach(el => {
             el.classList.remove('ozw-drop-target');
         });
+        
+        this.removeDropIndicator();
+    }
+
+    protected showDropIndicator(targetElement: HTMLElement, event: DragEvent): void {
+        const rect = targetElement.getBoundingClientRect();
+        const mouseY = event.clientY;
+        const mouseX = event.clientX;
+        
+        // Determine if we should insert before or after
+        const parentElement = targetElement.parentElement;
+        if (!parentElement) return;
+        
+        const parentStyle = window.getComputedStyle(parentElement);
+        const isHorizontal = parentStyle.flexDirection === 'row';
+        
+        // Calculate position
+        if (isHorizontal) {
+            const midX = rect.left + rect.width / 2;
+            this._dropPosition = mouseX < midX ? 'before' : 'after';
+        } else {
+            const midY = rect.top + rect.height / 2;
+            this._dropPosition = mouseY < midY ? 'before' : 'after';
+        }
+        
+        // Create or update indicator
+        if (!this._dropIndicator) {
+            this._dropIndicator = document.createElement('div');
+            this._dropIndicator.className = 'ozw-drop-indicator';
+            document.body.appendChild(this._dropIndicator);
+        }
+        
+        // Position the indicator
+        if (isHorizontal) {
+            this._dropIndicator.style.position = 'fixed';
+            this._dropIndicator.style.width = '3px';
+            this._dropIndicator.style.height = `${rect.height}px`;
+            this._dropIndicator.style.backgroundColor = '#007acc';
+            this._dropIndicator.style.top = `${rect.top}px`;
+            this._dropIndicator.style.left = this._dropPosition === 'before' ? `${rect.left - 2}px` : `${rect.right - 1}px`;
+            this._dropIndicator.style.zIndex = '10000';
+            this._dropIndicator.style.pointerEvents = 'none';
+            this._dropIndicator.style.boxShadow = '0 0 4px rgba(0, 122, 204, 0.5)';
+        } else {
+            this._dropIndicator.style.position = 'fixed';
+            this._dropIndicator.style.width = `${rect.width}px`;
+            this._dropIndicator.style.height = '3px';
+            this._dropIndicator.style.backgroundColor = '#007acc';
+            this._dropIndicator.style.left = `${rect.left}px`;
+            this._dropIndicator.style.top = this._dropPosition === 'before' ? `${rect.top - 2}px` : `${rect.bottom - 1}px`;
+            this._dropIndicator.style.zIndex = '10000';
+            this._dropIndicator.style.pointerEvents = 'none';
+            this._dropIndicator.style.boxShadow = '0 0 4px rgba(0, 122, 204, 0.5)';
+        }
+    }
+    
+    protected removeDropIndicator(): void {
+        if (this._dropIndicator) {
+            this._dropIndicator.remove();
+            this._dropIndicator = null;
+        }
+        // Don't clear _dropPosition here - it's needed for the drop event
     }
 
     protected moveComponentToTarget(componentId: string, targetElement: HTMLElement): void {
@@ -901,36 +998,87 @@ export class OzwEditorWidget extends BaseWidget implements Saveable, SaveableSou
             return;
         }
 
-        // Remove from current location
-        const node = this.removeNodeFromTree(componentId, this._document.schema.tree);
-        if (!node) {
-            return;
-        }
-
         // Add to new location
         if (targetElement.classList.contains('ozw-canvas-workspace')) {
+            // Remove from current location
+            const node = this.removeNodeFromTree(componentId, this._document.schema.tree);
+            if (!node) {
+                return;
+            }
             // Dropped on root canvas
             this._document.schema.tree.push(node);
         } else if (targetId && targetType) {
             // Check if target is a layout container
             if (this.canHaveChildren(targetType)) {
+                // Remove from current location
+                const node = this.removeNodeFromTree(componentId, this._document.schema.tree);
+                if (!node) {
+                    return;
+                }
                 // Target IS a layout - move INSIDE it
                 this.addNodeToParent(node, targetId, this._document.schema.tree);
             } else {
-                // Target is NOT a layout - move to its PARENT
-                const parentId = this.findParentId(targetId);
-                if (parentId) {
-                    this.addNodeToParent(node, parentId, this._document.schema.tree);
-                } else {
-                    // No parent, add to root
-                    this._document.schema.tree.push(node);
-                }
+                // Target is NOT a layout - insert before/after based on _dropPosition
+                console.log('INSERTING:', componentId, this._dropPosition, 'target:', targetId);
+                this.insertComponentRelativeToSmart(componentId, targetId, this._dropPosition || 'after');
             }
         }
 
         this.dirty = true;
         this.syncToText();
         this.renderCanvas();
+    }
+
+    protected insertComponentRelativeToSmart(sourceId: string, targetId: string, position: 'before' | 'after' | 'inside'): void {
+        // Find BOTH components BEFORE removing anything
+        const sourceInfo = this.findNodeWithParent(sourceId, this._document.schema.tree);
+        const targetInfo = this.findNodeWithParent(targetId, this._document.schema.tree);
+        
+        if (!sourceInfo || !targetInfo) {
+            console.error('Could not find source or target for insertion');
+            return;
+        }
+
+        const sourceArray = sourceInfo.parentArray;
+        const targetArray = targetInfo.parentArray;
+        const sourceIndex = sourceInfo.index;
+        let targetIndex = targetInfo.index;
+
+        // Check if they're in the same parent array
+        const sameParent = sourceArray === targetArray;
+
+        // Remove source node
+        const sourceNode = sourceArray.splice(sourceIndex, 1)[0];
+
+        // Adjust target index if needed
+        if (sameParent && sourceIndex < targetIndex) {
+            // Source was before target, so removing it shifts target's index down by 1
+            targetIndex--;
+        }
+
+        // Insert at the correct position
+        if (position === 'before') {
+            targetArray.splice(targetIndex, 0, sourceNode);
+        } else {
+            targetArray.splice(targetIndex + 1, 0, sourceNode);
+        }
+
+        console.log('Inserted component', position, 'target. SourceIdx:', sourceIndex, 'AdjustedTargetIdx:', targetIndex);
+    }
+
+    protected findNodeWithParent(nodeId: string, tree: TreeNode[], parentArray: TreeNode[] = tree): { node: TreeNode; parentArray: TreeNode[]; index: number } | null {
+        for (let i = 0; i < tree.length; i++) {
+            if (tree[i].id === nodeId) {
+                return { node: tree[i], parentArray: parentArray, index: i };
+            }
+            if (tree[i].children) {
+                const found = this.findNodeWithParent(nodeId, tree[i].children!, tree[i].children!);
+                if (found) {
+                    return found;
+                }
+            }
+        }
+        return null;
     }
 
     protected isDescendant(potentialDescendantId: string, ancestorId: string): boolean {
