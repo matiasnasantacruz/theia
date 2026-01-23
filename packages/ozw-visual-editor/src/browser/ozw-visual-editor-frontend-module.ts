@@ -19,6 +19,8 @@ import '../../src/browser/style/ozw-toolbox.css';
 
 import { ContainerModule } from '@theia/core/shared/inversify';
 import { OpenHandler, WidgetFactory, NavigatableWidgetOptions } from '@theia/core/lib/browser';
+import URI from '@theia/core/lib/common/uri';
+import { FileService } from '@theia/filesystem/lib/browser/file-service';
 import { OzwEditorWidget } from './ozw-editor-widget';
 import { OzwToolboxWidget } from './ozw-toolbox-widget';
 import { OzwOpenHandler } from './ozw-open-handler';
@@ -30,9 +32,25 @@ export default new ContainerModule(bind => {
     bind(OzwEditorWidget).toSelf().inTransientScope();
     bind(WidgetFactory).toDynamicValue(ctx => ({
         id: OzwEditorWidget.ID,
-        createWidget: (options: NavigatableWidgetOptions) => {
-            // Create a new widget instance - initialization happens in the handler
-            return ctx.container.get<OzwEditorWidget>(OzwEditorWidget);
+        createWidget: async (options: NavigatableWidgetOptions) => {
+            // Create a new widget instance
+            const widget = ctx.container.get<OzwEditorWidget>(OzwEditorWidget);
+            const uri = new URI(options.uri);
+            
+            // Load file content for initialization
+            const fileService = ctx.container.get<FileService>(FileService);
+            let content = '';
+            try {
+                const resource = await fileService.read(uri);
+                content = resource.value;
+            } catch (e) {
+                console.warn('Could not read file, creating new document', e);
+                content = '{"version":"1.0","components":[]}';
+            }
+            
+            // Initialize the widget with URI and content
+            await widget.initialize(uri, content);
+            return widget;
         }
     })).inSingletonScope();
 
