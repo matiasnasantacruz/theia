@@ -15,7 +15,7 @@
 // *****************************************************************************
 
 import { injectable, inject, postConstruct } from '@theia/core/shared/inversify';
-import { BaseWidget, Message, Saveable, SaveableSource, Widget, StatefulWidget, NavigatableWidget, WidgetManager } from '@theia/core/lib/browser';
+import { BaseWidget, Message, Saveable, SaveableSource, Widget, StatefulWidget, NavigatableWidget, WidgetManager, ApplicationShell } from '@theia/core/lib/browser';
 import { DisposableCollection, Emitter, Event } from '@theia/core/lib/common';
 import { MonacoEditorProvider } from '@theia/monaco/lib/browser/monaco-editor-provider';
 import { MonacoEditor } from '@theia/monaco/lib/browser/monaco-editor';
@@ -70,6 +70,9 @@ export class OzwEditorWidget extends BaseWidget implements Saveable, SaveableSou
 
     @inject(WidgetManager)
     protected readonly widgetManager: WidgetManager;
+
+    @inject(ApplicationShell)
+    protected readonly shell: ApplicationShell;
 
     protected readonly onDirtyChangedEmitter = new Emitter<void>();
     readonly onContentChanged: Event<void> = this.onDirtyChangedEmitter.event;
@@ -421,12 +424,13 @@ export class OzwEditorWidget extends BaseWidget implements Saveable, SaveableSou
             element.style.position = 'relative';
             element.style.display = 'flex';
             element.style.flexDirection = 'row';
-            element.style.gap = '12px';
-            element.style.padding = '12px';
+            element.style.gap = '8px';
+            element.style.padding = '8px';
             element.style.border = '2px dashed #10a37f';
             element.style.borderRadius = '4px';
-            element.style.minHeight = '100px';
+            element.style.minHeight = 'auto';
             element.style.minWidth = '100px';
+            element.style.alignItems = 'center';
             element.style.backgroundColor = 'rgba(16, 163, 127, 0.05)';
 
             // Add label for row
@@ -505,40 +509,60 @@ export class OzwEditorWidget extends BaseWidget implements Saveable, SaveableSou
     }
 
     protected renderLeafComponent(element: HTMLDivElement, type: string, metadata: ComponentMetadata): void {
+        const baseHeight = '36px';
+
         switch (type) {
             case 'button':
-                element.innerHTML = `<button class="theia-button">${metadata.label || 'Button'}</button>`;
-                element.style.backgroundColor = metadata.backgroundColor || '#007acc';
-                element.style.color = metadata.color || 'white';
-                element.style.borderRadius = '4px';
+                element.innerHTML = `<button class="theia-button ozw-modern-button">${metadata.label || 'Button'}</button>`;
+                element.style.backgroundColor = 'transparent';
+                element.style.padding = '0';
+                element.style.height = baseHeight;
+                element.style.display = 'flex';
+                element.style.alignItems = 'center';
                 break;
             case 'input':
-                element.innerHTML = `<input type="text" placeholder="${metadata.label || 'Input'}" />`;
-                element.style.backgroundColor = '#fff';
-                element.style.border = '1px solid #ccc';
-                element.style.borderRadius = '4px';
+                element.innerHTML = `<input type="text" class="ozw-modern-input" placeholder="${metadata.label || 'Input'}" />`;
+                element.style.backgroundColor = 'transparent';
+                element.style.padding = '0';
+                element.style.height = baseHeight;
+                element.style.display = 'flex';
+                element.style.alignItems = 'center';
                 break;
             case 'text':
-                element.innerHTML = `<p style="margin: 0;">${metadata.label || 'Text'}</p>`;
+                element.innerHTML = `<p class="ozw-modern-text">${metadata.label || 'Text'}</p>`;
+                element.style.backgroundColor = 'transparent';
+                element.style.padding = '0 8px';
+                element.style.height = baseHeight;
+                element.style.display = 'flex';
+                element.style.alignItems = 'center';
                 break;
             case 'image':
-                element.innerHTML = `<div style="width: 100px; height: 100px; background: #f0f0f0; display: flex; align-items: center; justify-content: center; border-radius: 4px;">
-                    <i class="fa fa-image" style="font-size: 24px; color: #999;"></i>
+                element.innerHTML = `<div class="ozw-modern-image">
+                    <i class="fa fa-image" style="font-size: 20px; color: #999;"></i>
                 </div>`;
+                element.style.padding = '0';
+                element.style.height = baseHeight;
+                element.style.display = 'flex';
+                element.style.alignItems = 'center';
                 break;
             case 'card':
-                element.innerHTML = `<div style="background: #f5f5f5; border: 1px solid #ddd; border-radius: 8px; padding: 16px; min-width: 200px;">
-                    <h4 style="margin: 0 0 8px 0;">${metadata.label || 'Card Title'}</h4>
-                    <p style="margin: 0; color: #666;">Card content</p>
+                element.innerHTML = `<div class="ozw-modern-card">
+                    <h4>${metadata.label || 'Card Title'}</h4>
+                    <p>Card content</p>
                 </div>`;
+                element.style.padding = '0';
                 break;
             case 'container':
-                element.innerHTML = `<div style="background: #fafafa; border: 1px solid #ddd; border-radius: 4px; padding: 16px; min-width: 150px; min-height: 100px;">
-                    <p style="margin: 0; color: #999;">${metadata.label || 'Container'}</p>
+                element.innerHTML = `<div class="ozw-modern-container">
+                    <p>${metadata.label || 'Container'}</p>
                 </div>`;
+                element.style.padding = '0';
                 break;
             default:
                 element.textContent = metadata.label || type;
+                element.style.height = baseHeight;
+                element.style.display = 'flex';
+                element.style.alignItems = 'center';
         }
     }
 
@@ -716,7 +740,7 @@ export class OzwEditorWidget extends BaseWidget implements Saveable, SaveableSou
             // Moving existing component
             this.moveComponentToTarget(this._draggedComponentId, actualTarget);
         }
-        
+
         // Clear drop position AFTER using it
         this._dropPosition = null;
     }
@@ -919,7 +943,7 @@ export class OzwEditorWidget extends BaseWidget implements Saveable, SaveableSou
         document.querySelectorAll('.ozw-drop-target').forEach(el => {
             el.classList.remove('ozw-drop-target');
         });
-        
+
         this.removeDropIndicator();
     }
 
@@ -927,14 +951,14 @@ export class OzwEditorWidget extends BaseWidget implements Saveable, SaveableSou
         const rect = targetElement.getBoundingClientRect();
         const mouseY = event.clientY;
         const mouseX = event.clientX;
-        
+
         // Determine if we should insert before or after
         const parentElement = targetElement.parentElement;
         if (!parentElement) return;
-        
+
         const parentStyle = window.getComputedStyle(parentElement);
         const isHorizontal = parentStyle.flexDirection === 'row';
-        
+
         // Calculate position
         if (isHorizontal) {
             const midX = rect.left + rect.width / 2;
@@ -943,38 +967,40 @@ export class OzwEditorWidget extends BaseWidget implements Saveable, SaveableSou
             const midY = rect.top + rect.height / 2;
             this._dropPosition = mouseY < midY ? 'before' : 'after';
         }
-        
+
         // Create or update indicator
         if (!this._dropIndicator) {
             this._dropIndicator = document.createElement('div');
             this._dropIndicator.className = 'ozw-drop-indicator';
             document.body.appendChild(this._dropIndicator);
         }
-        
+
         // Position the indicator
         if (isHorizontal) {
             this._dropIndicator.style.position = 'fixed';
             this._dropIndicator.style.width = '3px';
-            this._dropIndicator.style.height = `${rect.height}px`;
+            this._dropIndicator.style.height = `${rect.height - 8}px`;
             this._dropIndicator.style.backgroundColor = '#007acc';
-            this._dropIndicator.style.top = `${rect.top}px`;
-            this._dropIndicator.style.left = this._dropPosition === 'before' ? `${rect.left - 2}px` : `${rect.right - 1}px`;
+            this._dropIndicator.style.top = `${rect.top + 4}px`;
+            this._dropIndicator.style.left = this._dropPosition === 'before' ? `${rect.left - 6}px` : `${rect.right + 3}px`;
             this._dropIndicator.style.zIndex = '10000';
             this._dropIndicator.style.pointerEvents = 'none';
-            this._dropIndicator.style.boxShadow = '0 0 4px rgba(0, 122, 204, 0.5)';
+            this._dropIndicator.style.boxShadow = '0 0 6px rgba(0, 122, 204, 0.8)';
+            this._dropIndicator.style.borderRadius = '2px';
         } else {
             this._dropIndicator.style.position = 'fixed';
-            this._dropIndicator.style.width = `${rect.width}px`;
+            this._dropIndicator.style.width = `${rect.width - 8}px`;
             this._dropIndicator.style.height = '3px';
             this._dropIndicator.style.backgroundColor = '#007acc';
-            this._dropIndicator.style.left = `${rect.left}px`;
-            this._dropIndicator.style.top = this._dropPosition === 'before' ? `${rect.top - 2}px` : `${rect.bottom - 1}px`;
+            this._dropIndicator.style.left = `${rect.left + 4}px`;
+            this._dropIndicator.style.top = this._dropPosition === 'before' ? `${rect.top - 6}px` : `${rect.bottom + 3}px`;
             this._dropIndicator.style.zIndex = '10000';
             this._dropIndicator.style.pointerEvents = 'none';
-            this._dropIndicator.style.boxShadow = '0 0 4px rgba(0, 122, 204, 0.5)';
+            this._dropIndicator.style.boxShadow = '0 0 6px rgba(0, 122, 204, 0.8)';
+            this._dropIndicator.style.borderRadius = '2px';
         }
     }
-    
+
     protected removeDropIndicator(): void {
         if (this._dropIndicator) {
             this._dropIndicator.remove();
@@ -1033,7 +1059,7 @@ export class OzwEditorWidget extends BaseWidget implements Saveable, SaveableSou
         // Find BOTH components BEFORE removing anything
         const sourceInfo = this.findNodeWithParent(sourceId, this._document.schema.tree);
         const targetInfo = this.findNodeWithParent(targetId, this._document.schema.tree);
-        
+
         if (!sourceInfo || !targetInfo) {
             console.error('Could not find source or target for insertion');
             return;
@@ -1129,27 +1155,65 @@ export class OzwEditorWidget extends BaseWidget implements Saveable, SaveableSou
     }
 
     protected selectComponent(componentId: string): void {
+        console.log('🎯 selectComponent called with ID:', componentId);
         this._selectedComponentId = componentId;
         this.renderCanvas();
 
         // Update properties widget
+        console.log('📋 Calling updatePropertiesWidget...');
         this.updatePropertiesWidget(componentId);
     }
 
     protected async updatePropertiesWidget(componentId: string): Promise<void> {
-        const propertiesWidget = await this.widgetManager.getWidget<OzwPropertiesWidget>(OzwPropertiesWidget.ID);
-        if (propertiesWidget) {
-            const component = this._document.components.find(c => c.id === componentId);
-            if (component) {
-                const metadata = this._document.schema.metadata[componentId] || {};
-                propertiesWidget.setSelectedComponent(componentId, component.type, metadata);
+        console.log('🔍 updatePropertiesWidget START for:', componentId);
+        
+        try {
+            // Try to get or create the widget using WidgetManager
+            console.log('🆕 Getting or creating widget...');
+            const propertiesWidget = await this.widgetManager.getOrCreateWidget<OzwPropertiesWidget>(
+                OzwPropertiesWidget.ID
+            );
+            
+            console.log('📦 Widget obtained:', propertiesWidget ? 'Success' : 'Failed');
+            console.log('📦 Widget type:', propertiesWidget?.constructor.name);
 
-                // Setup property change listener
-                propertiesWidget.onPropertyChange((event) => {
-                    this.handlePropertyChange(event.componentId, event.property, event.value);
-                });
+            if (propertiesWidget) {
+                const component = this._document.components.find(c => c.id === componentId);
+                console.log('🧩 Component found:', component ? `${component.type} (${component.id})` : 'NOT FOUND');
+                
+                if (component) {
+                    const metadata = this._document.schema.metadata[componentId] || {};
+                    console.log('📝 Metadata:', metadata);
+                    
+                    propertiesWidget.setSelectedComponent(componentId, component.type, metadata);
+
+                    // Setup property change listener
+                    propertiesWidget.onPropertyChange((event) => {
+                        this.handlePropertyChange(event.componentId, event.property, event.value);
+                    });
+
+                    // Add to shell if not already there
+                    if (!propertiesWidget.isAttached) {
+                        console.log('➕ Adding widget to shell...');
+                        await this.shell.addWidget(propertiesWidget, { area: 'right', rank: 200 });
+                    }
+                    
+                    // Activate the widget
+                    console.log('🚀 Activating widget...');
+                    await this.shell.activateWidget(propertiesWidget.id);
+                    
+                    console.log('👁️ Widget visible?', propertiesWidget.isVisible);
+                    console.log('📌 Widget attached?', propertiesWidget.isAttached);
+                    console.log('✨ Properties widget updated successfully!');
+                }
+            } else {
+                console.error('❌ Failed to get or create properties widget');
             }
+        } catch (error) {
+            console.error('💥 Error in updatePropertiesWidget:', error);
         }
+        
+        console.log('🏁 updatePropertiesWidget END');
     }
 
     protected handlePropertyChange(componentId: string, property: string, value: unknown): void {
