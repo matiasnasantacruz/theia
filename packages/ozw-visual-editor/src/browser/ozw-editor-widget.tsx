@@ -1496,10 +1496,32 @@ export class OzwEditorWidget extends BaseWidget implements Saveable, SaveableSou
 
         // Show drop indicator
         if (targetType && this.canHaveChildren(targetType)) {
-            // Container - show inside indicator
-            this._dropPosition = 'inside';
-            target.classList.add('ozw-drop-target');
-            this.removeDropIndicator();
+            // Container (Column/Row):
+            // - allow dropping INSIDE when hovering the "center"
+            // - allow dropping BEFORE/AFTER when hovering near the edges (so you can insert above the first row, etc.)
+            const rect = target.getBoundingClientRect();
+            const parentElement = target.parentElement;
+            const isHorizontal = parentElement
+                ? parentElement.classList.contains('ozw-layout-content--row')
+                : false;
+            const edge = this.getDropEdgeThreshold(rect, isHorizontal);
+            const inBeforeZone = isHorizontal
+                ? event.clientX < rect.left + edge
+                : event.clientY < rect.top + edge;
+            const inAfterZone = isHorizontal
+                ? event.clientX > rect.right - edge
+                : event.clientY > rect.bottom - edge;
+
+            if (parentElement && (inBeforeZone || inAfterZone)) {
+                // Relative insertion (before/after this container in its parent)
+                this.showDropIndicator(target, event);
+                target.classList.remove('ozw-drop-target');
+            } else {
+                // Default: drop inside container
+                this._dropPosition = 'inside';
+                target.classList.add('ozw-drop-target');
+                this.removeDropIndicator();
+            }
         } else if (targetId) {
             // Leaf component - show swap/insert indicator
             this.showDropIndicator(target, event);
@@ -1761,8 +1783,10 @@ export class OzwEditorWidget extends BaseWidget implements Saveable, SaveableSou
         const parentElement = targetElement.parentElement;
         if (!parentElement) return;
 
-        const parentStyle = window.getComputedStyle(parentElement);
-        const isHorizontal = parentStyle.flexDirection === 'row';
+        // Prefer a cheap class check over getComputedStyle on every dragover.
+        // Fallback to computed style for non-layout parents.
+        const isHorizontal = parentElement.classList.contains('ozw-layout-content--row')
+            || window.getComputedStyle(parentElement).flexDirection === 'row';
 
         // Calculate position
         if (isHorizontal) {
@@ -1841,13 +1865,18 @@ export class OzwEditorWidget extends BaseWidget implements Saveable, SaveableSou
         } else if (targetId && targetType) {
             // Check if target is a layout container
             if (this.canHaveChildren(targetType)) {
-                // Remove from current location
-                const node = this.removeNodeFromTree(componentId, this._document.schema.tree);
-                if (!node) {
-                    return;
+                // If user is hovering the edge, allow BEFORE/AFTER the container (important for "before first row" cases).
+                if (this._dropPosition === 'before' || this._dropPosition === 'after') {
+                    this.insertComponentRelativeToSmart(componentId, targetId, this._dropPosition);
+                } else {
+                    // Remove from current location
+                    const node = this.removeNodeFromTree(componentId, this._document.schema.tree);
+                    if (!node) {
+                        return;
+                    }
+                    // Target IS a layout - move INSIDE it
+                    this.addNodeToParent(node, targetId, this._document.schema.tree);
                 }
-                // Target IS a layout - move INSIDE it
-                this.addNodeToParent(node, targetId, this._document.schema.tree);
             } else {
                 // Target is NOT a layout - insert before/after based on _dropPosition
                 console.log('INSERTING:', componentId, this._dropPosition, 'target:', targetId);
@@ -1895,6 +1924,12 @@ export class OzwEditorWidget extends BaseWidget implements Saveable, SaveableSou
         }
 
         console.log('Inserted component', position, 'target. SourceIdx:', sourceIndex, 'AdjustedTargetIdx:', targetIndex);
+    }
+
+    protected getDropEdgeThreshold(rect: DOMRect, isHorizontal: boolean): number {
+        const size = isHorizontal ? rect.width : rect.height;
+        // A small "edge zone" feels natural: not too small to miss, not too large to block "inside" drops.
+        return Math.max(10, Math.min(24, size * 0.2));
     }
 
     protected findNodeWithParent(nodeId: string, tree: TreeNode[], parentArray: TreeNode[] = tree): { node: TreeNode; parentArray: TreeNode[]; index: number } | null {
