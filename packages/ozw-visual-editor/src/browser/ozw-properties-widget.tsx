@@ -20,6 +20,45 @@ import * as React from '@theia/core/shared/react';
 import { createRoot, Root } from '@theia/core/shared/react-dom/client';
 import { ComponentMetadata } from './ozw-editor-widget';
 
+// Componente de input que preserva la posición del cursor
+interface ControlledInputProps {
+    value: string;
+    onChange: (value: string) => void;
+    placeholder?: string;
+    className?: string;
+    type?: string;
+}
+
+const ControlledInput: React.FC<ControlledInputProps> = ({ value, onChange, placeholder, className, type = 'text' }) => {
+    const inputRef = React.useRef<HTMLInputElement>(null);
+
+    const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const newValue = e.target.value;
+        const selectionStart = e.target.selectionStart;
+        const selectionEnd = e.target.selectionEnd;
+
+        onChange(newValue);
+
+        // Restaurar la posición del cursor después del re-render
+        setTimeout(() => {
+            if (inputRef.current) {
+                inputRef.current.setSelectionRange(selectionStart, selectionEnd);
+            }
+        }, 0);
+    };
+
+    return (
+        <input
+            ref={inputRef}
+            type={type}
+            className={className}
+            value={value}
+            onChange={handleChange}
+            placeholder={placeholder}
+        />
+    );
+};
+
 export interface PropertyChangeEvent {
     componentId: string;
     property: string;
@@ -121,12 +160,11 @@ export class OzwPropertiesWidget extends BaseWidget {
         properties.push(
             <div key="label" className='ozw-property-row'>
                 <label className='ozw-property-label'>Label</label>
-                <input
-                    type="text"
-                    className='theia-input ozw-property-input'
+                <ControlledInput
                     value={this.selectedComponentMetadata.label as string || ''}
-                    onChange={(e) => this.handlePropertyChange('label', e.target.value)}
+                    onChange={(value) => this.handlePropertyChange('label', value)}
                     placeholder="Component label"
+                    className='theia-input ozw-property-input'
                 />
             </div>
         );
@@ -168,12 +206,11 @@ export class OzwPropertiesWidget extends BaseWidget {
             properties.push(
                 <div key="placeholder" className='ozw-property-row'>
                     <label className='ozw-property-label'>Placeholder</label>
-                    <input
-                        type="text"
-                        className='theia-input ozw-property-input'
+                    <ControlledInput
                         value={this.selectedComponentMetadata.placeholder as string || ''}
-                        onChange={(e) => this.handlePropertyChange('placeholder', e.target.value)}
+                        onChange={(value) => this.handlePropertyChange('placeholder', value)}
                         placeholder="Enter placeholder text"
+                        className='theia-input ozw-property-input'
                     />
                 </div>
             );
@@ -292,12 +329,11 @@ export class OzwPropertiesWidget extends BaseWidget {
         properties.push(
             <div key="width" className='ozw-property-row'>
                 <label className='ozw-property-label'>Width</label>
-                <input
-                    type="text"
-                    className='theia-input ozw-property-input'
+                <ControlledInput
                     value={this.selectedComponentMetadata.width as string || ''}
-                    onChange={(e) => this.handlePropertyChange('width', e.target.value)}
+                    onChange={(value) => this.handlePropertyChange('width', value)}
                     placeholder="auto"
+                    className='theia-input ozw-property-input'
                 />
             </div>
         );
@@ -305,12 +341,11 @@ export class OzwPropertiesWidget extends BaseWidget {
         properties.push(
             <div key="height" className='ozw-property-row'>
                 <label className='ozw-property-label'>Height</label>
-                <input
-                    type="text"
-                    className='theia-input ozw-property-input'
+                <ControlledInput
                     value={this.selectedComponentMetadata.height as string || ''}
-                    onChange={(e) => this.handlePropertyChange('height', e.target.value)}
+                    onChange={(value) => this.handlePropertyChange('height', value)}
                     placeholder="auto"
+                    className='theia-input ozw-property-input'
                 />
             </div>
         );

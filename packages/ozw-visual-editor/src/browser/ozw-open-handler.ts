@@ -15,7 +15,7 @@
 // *****************************************************************************
 
 import { injectable, inject } from '@theia/core/shared/inversify';
-import { NavigatableWidgetOpenHandler, NavigatableWidgetOptions } from '@theia/core/lib/browser';
+import { NavigatableWidgetOpenHandler, NavigatableWidgetOptions, WidgetOpenerOptions } from '@theia/core/lib/browser';
 import URI from '@theia/core/lib/common/uri';
 import { OzwEditorWidget } from './ozw-editor-widget';
 import { FileService } from '@theia/filesystem/lib/browser/file-service';
@@ -30,11 +30,40 @@ export class OzwOpenHandler extends NavigatableWidgetOpenHandler<OzwEditorWidget
     @inject(FileService)
     protected readonly fileService: FileService;
 
-    canHandle(uri: URI): number {
+    override canHandle(uri: URI): number {
         if (uri.path.ext === '.ozw') {
-            return 300; // Higher priority than default text editor
+            return 1000; // Very high priority to ensure only this handler opens .ozw files
         }
         return 0;
+    }
+
+    override async open(uri: URI, options?: WidgetOpenerOptions): Promise<OzwEditorWidget> {
+        // Check if a widget with this URI already exists
+        const existingWidget = this.findExistingWidget(uri);
+        if (existingWidget) {
+            // Widget already exists, just activate it
+            await this.shell.activateWidget(existingWidget.id);
+            return existingWidget;
+        }
+
+        // No existing widget, create a new one
+        return await super.open(uri, options);
+    }
+
+    protected findExistingWidget(uri: URI): OzwEditorWidget | undefined {
+        const uriString = uri.withoutFragment().normalizePath().toString();
+        for (const widget of this.shell.widgets) {
+            if (widget instanceof OzwEditorWidget) {
+                const widgetUri = widget.getResourceUri();
+                if (widgetUri) {
+                    const widgetUriString = widgetUri.withoutFragment().normalizePath().toString();
+                    if (widgetUriString === uriString) {
+                        return widget;
+                    }
+                }
+            }
+        }
+        return undefined;
     }
 
     protected override createWidgetOptions(uri: URI): NavigatableWidgetOptions {
