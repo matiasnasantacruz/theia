@@ -17,6 +17,7 @@
 import { injectable, inject, postConstruct } from '@theia/core/shared/inversify';
 import { BaseWidget, Message, Saveable, SaveableSource, Widget, StatefulWidget, NavigatableWidget, WidgetManager, ApplicationShell, codicon } from '@theia/core/lib/browser';
 import { DisposableCollection, Emitter, Event } from '@theia/core/lib/common';
+import { MessageService } from '@theia/core/lib/common/message-service';
 import { MonacoEditorProvider } from '@theia/monaco/lib/browser/monaco-editor-provider';
 import { MonacoEditor } from '@theia/monaco/lib/browser/monaco-editor';
 import URI from '@theia/core/lib/common/uri';
@@ -84,6 +85,9 @@ export class OzwEditorWidget extends BaseWidget implements Saveable, SaveableSou
     @inject(FileService)
     protected readonly fileService: FileService;
 
+    @inject(MessageService)
+    protected readonly messageService: MessageService;
+
     protected readonly onDirtyChangedEmitter = new Emitter<void>();
     readonly onContentChanged: Event<void> = this.onDirtyChangedEmitter.event;
     readonly onDirtyChanged: Event<void> = this.onDirtyChangedEmitter.event;
@@ -122,6 +126,7 @@ export class OzwEditorWidget extends BaseWidget implements Saveable, SaveableSou
     protected _refreshTimeout: number | undefined;
     protected _lastResizeDimensions: { width: number; height: number } | undefined;
     protected _resizeObserver: ResizeObserver | undefined;
+    protected _lastEditSource: 'text' | 'visual' = 'visual';
 
     get uri(): URI {
         return this._uri;
@@ -244,6 +249,7 @@ export class OzwEditorWidget extends BaseWidget implements Saveable, SaveableSou
             // Only mark as dirty if the change came from user editing, not from sync
             if (!this._isSyncingToText) {
                 console.log('📝 Text editor content changed, mode:', this._mode, 'isSyncingToText:', this._isSyncingToText);
+                this._lastEditSource = 'text';
                 this.dirty = true;
                 // Use debounced sync in split mode for real-time updates, immediate sync in other modes
                 if (this._mode === 'split') {
@@ -451,6 +457,11 @@ export class OzwEditorWidget extends BaseWidget implements Saveable, SaveableSou
         switch (this._mode) {
             case 'canvas':
                 this.canvasContainer.style.display = 'flex';
+                // If the user last edited the JSON, make sure we apply it before rendering the canvas.
+                // This also flushes any pending debounced sync in split mode.
+                if (this.textEditor && this._lastEditSource === 'text') {
+                    this.syncFromText({ renderCanvas: false, updateProperties: true });
+                }
                 // Re-render canvas when switching back to canvas mode
                 this.renderCanvas();
                 break;
@@ -1043,10 +1054,10 @@ export class OzwEditorWidget extends BaseWidget implements Saveable, SaveableSou
         return type === 'column' || type === 'row';
     }
 
-    protected syncFromText(): void {
+    protected syncFromText(options?: { renderCanvas?: boolean; updateProperties?: boolean }): boolean {
         if (!this.textEditor) {
             console.log('⚠️ syncFromText: No text editor');
-            return;
+            return false;
         }
         try {
             const content = this.textEditor.document.getText().trim();
@@ -1055,7 +1066,7 @@ export class OzwEditorWidget extends BaseWidget implements Saveable, SaveableSou
             // Skip if content is empty
             if (!content) {
                 console.log('⚠️ syncFromText: Content is empty');
-                return;
+                return false;
             }
 
             // Validate JSON before parsing
@@ -1065,7 +1076,7 @@ export class OzwEditorWidget extends BaseWidget implements Saveable, SaveableSou
             } catch (parseError) {
                 // Invalid JSON - don't update document, but don't break the flow
                 console.warn('❌ Invalid JSON in text editor, skipping sync:', parseError);
-                return;
+                return false;
             }
 
             console.log('✅ syncFromText: JSON parsed successfully');
@@ -1141,22 +1152,41 @@ export class OzwEditorWidget extends BaseWidget implements Saveable, SaveableSou
                 });
             }
 
-            // ALWAYS re-render canvas if in canvas or split mode
-            // Use requestAnimationFrame to ensure DOM is ready
-            if (this._mode === 'canvas' || this._mode === 'split') {
-                console.log('🎨 syncFromText: Scheduling canvas render, mode:', this._mode);
-                requestAnimationFrame(() => {
-                    console.log('🎨 syncFromText: Executing canvas render now');
-                    this.renderCanvas();
-                    console.log('✅ syncFromText: Canvas render completed');
-                });
-            } else {
-                console.log('⏭️ syncFromText: Skipping canvas render, mode is:', this._mode);
+            const updateProperties = options?.updateProperties !== false;
+            if (updateProperties && this._selectedComponentId) {
+                const selectedId = this._selectedComponentId;
+                const exists = this._document.components.some(c => c.id === selectedId);
+                if (exists) {
+                    // Keep the properties panel in sync with the new JSON.
+                    void this.updatePropertiesWidget(selectedId);
+                } else {
+                    // Selected component no longer exists: clear selection and show toolbox.
+                    this._selectedComponentId = null;
+                    void this.showToolbox();
+                }
             }
+
+            const renderCanvas = options?.renderCanvas !== false;
+            // Re-render canvas if in canvas or split mode (unless explicitly disabled)
+            // Use requestAnimationFrame to ensure DOM is ready
+            if (renderCanvas) {
+                if (this._mode === 'canvas' || this._mode === 'split') {
+                    console.log('🎨 syncFromText: Scheduling canvas render, mode:', this._mode);
+                    requestAnimationFrame(() => {
+                        console.log('🎨 syncFromText: Executing canvas render now');
+                        this.renderCanvas();
+                        console.log('✅ syncFromText: Canvas render completed');
+                    });
+                } else {
+                    console.log('⏭️ syncFromText: Skipping canvas render, mode is:', this._mode);
+                }
+            }
+            return true;
         } catch (e) {
             // Invalid JSON or other error - don't update, but don't break the flow
             console.error('❌ Error syncing from text editor:', e);
             console.error('❌ Error stack:', e instanceof Error ? e.stack : 'No stack trace');
+            return false;
         }
     }
 
@@ -1261,6 +1291,8 @@ export class OzwEditorWidget extends BaseWidget implements Saveable, SaveableSou
      */
     protected syncToTextIfNeeded(): void {
         console.log('🔄 syncToTextIfNeeded: Mode is', this._mode);
+        // All callers of this method are visual (canvas/properties) edits.
+        this._lastEditSource = 'visual';
         if (this._mode === 'split') {
             // Use debounced sync in split mode for real-time bidirectional updates
             console.log('⏱️ syncToTextIfNeeded: Using debounced sync');
@@ -1277,18 +1309,27 @@ export class OzwEditorWidget extends BaseWidget implements Saveable, SaveableSou
             return;
         }
 
-        // Sync document to text editor if in canvas or split mode
-        if (this._mode === 'canvas' || this._mode === 'split') {
-            this.syncToText();
+        // If we have a text editor, the file content should always come from it.
+        // Decide the direction of sync based on where the last user edit happened.
+        if (this.textEditor) {
+            if (this._lastEditSource === 'text') {
+                // Apply the JSON edits to the internal model so canvas/properties stay consistent.
+                const ok = this.syncFromText({ renderCanvas: false, updateProperties: true });
+                if (!ok) {
+                    void this.messageService.error('No se puede guardar: el JSON es inválido. Corregilo antes de guardar.');
+                    throw new Error('Invalid JSON - cannot save OZW');
+                }
+                // IMPORTANT: do NOT call syncToText() here, it would overwrite what the user typed.
+            } else {
+                // Visual edits: ensure the editor reflects the current document before saving.
+                this.syncToText();
+            }
         }
 
         // Get the current content (from text editor if available, otherwise from document)
-        let content: string;
-        if (this.textEditor) {
-            content = this.textEditor.document.getText();
-        } else {
-            content = JSON.stringify(this._document, null, 2);
-        }
+        const content = this.textEditor
+            ? this.textEditor.document.getText()
+            : JSON.stringify(this._document, null, 2);
 
         // Save directly to file
         try {
@@ -1334,18 +1375,34 @@ export class OzwEditorWidget extends BaseWidget implements Saveable, SaveableSou
     }
 
     createSnapshot(): Saveable.Snapshot {
+        const value = this.textEditor
+            ? this.textEditor.document.getText()
+            : JSON.stringify(this._document);
         return {
-            value: JSON.stringify(this._document),
-            read: () => JSON.stringify(this._document)
+            value,
+            read: () => value
         };
     }
 
     applySnapshot(snapshot: object): void {
         if ('value' in snapshot && typeof snapshot.value === 'string') {
             try {
-                this._document = JSON.parse(snapshot.value);
-                this.syncToText();
-                this.renderCanvas();
+                if (this.textEditor) {
+                    // Apply snapshot to the text model, then re-sync into the document.
+                    this._isSyncingToText = true;
+                    try {
+                        this.textEditor.document.textEditorModel.setValue(snapshot.value);
+                    } finally {
+                        setTimeout(() => {
+                            this._isSyncingToText = false;
+                        }, 10);
+                    }
+                    this._lastEditSource = 'text';
+                    this.syncFromText({ renderCanvas: true, updateProperties: true });
+                } else {
+                    this._document = JSON.parse(snapshot.value);
+                    this.renderCanvas();
+                }
             } catch (e) {
                 console.error('Failed to apply snapshot:', e);
             }
