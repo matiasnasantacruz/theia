@@ -1,0 +1,219 @@
+/* *****************************************************************************
+ * Copyright (C) 2026 and others.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Eclipse Public License v. 2.0 which is available at
+ * http://www.eclipse.org/legal/epl-2.0.
+ *
+ * This Source Code may also be made available under the following Secondary
+ * Licenses when the conditions for such availability set forth in the Eclipse
+ * Public License v. 2.0 are satisfied: GNU General Public License, version 2
+ * with the GNU Classpath Exception which is available at
+ * https://www.gnu.org/software/classpath/license.html.
+ *
+ * SPDX-License-Identifier: EPL-2.0 OR GPL-2.0-only WITH Classpath-exception-2.0
+ * *****************************************************************************/
+
+/*
+ * OZW Forms System
+ * - Inputs/selects/textareas with a consistent “brand” + theme-aware variables.
+ * - Field layout helpers usable by any future side panels.
+ * - Accessible focus ring, clear disabled states.
+ */
+
+:root {
+    --ozw-field-gap: 6px;
+    --ozw-field-label-fs: 11px;
+    --ozw-field-label-fw: 500;
+    --ozw-field-label-tracking: 0.35px;
+
+    --ozw-input-radius: 8px;
+    --ozw-input-h-sm: 30px;
+    --ozw-input-h-md: 34px;
+    --ozw-input-h-lg: 40px;
+    --ozw-input-px: 12px;
+
+    --ozw-input-shadow: 0 1px 2px rgba(0, 0, 0, 0.10);
+    --ozw-input-shadow-focus: 0 0 0 2px var(--theia-editor-background), 0 0 0 4px var(--theia-focusBorder);
+}
+
+/* Generic field stack (label + control) */
+.ozw-field {
+    display: flex;
+    flex-direction: column;
+    gap: var(--ozw-field-gap);
+    min-width: 0;
+}
+
+.ozw-field-label {
+    font-size: var(--ozw-field-label-fs);
+    font-weight: var(--ozw-field-label-fw);
+    letter-spacing: var(--ozw-field-label-tracking);
+    color: var(--theia-descriptionForeground);
+    user-select: none;
+}
+
+/* Base controls */
+.ozw-input,
+.ozw-select,
+.ozw-textarea {
+    width: 100%;
+    box-sizing: border-box;
+    border-radius: var(--ozw-input-radius);
+    border: 1px solid var(--theia-input-border);
+    background: var(--theia-input-background);
+    color: var(--theia-input-foreground);
+    box-shadow: var(--ozw-input-shadow);
+
+    height: var(--ozw-input-h, var(--ozw-input-h-md));
+    padding: 0 var(--ozw-input-px);
+
+    font-size: 12.5px;
+    font-weight: 450;
+    line-height: 1;
+
+    transition:
+        border-color 120ms ease,
+        box-shadow 120ms ease,
+        background-color 120ms ease,
+        filter 120ms ease;
+}
+
+.ozw-textarea {
+    height: auto;
+    min-height: 84px;
+    padding: 10px var(--ozw-input-px);
+    resize: vertical;
+    line-height: 1.35;
+}
+
+.ozw-input::placeholder,
+.ozw-textarea::placeholder {
+    color: var(--theia-input-placeholderForeground, var(--theia-descriptionForeground));
+    opacity: 0.8;
+}
+
+.ozw-input:hover,
+.ozw-select:hover,
+.ozw-textarea:hover {
+    border-color: var(--theia-focusBorder);
+}
+
+.ozw-input:focus,
+.ozw-select:focus,
+.ozw-textarea:focus {
+    outline: none;
+    box-shadow: var(--ozw-input-shadow-focus);
+    border-color: var(--theia-focusBorder);
+}
+
+.ozw-input[disabled],
+.ozw-select[disabled],
+.ozw-textarea[disabled] {
+    opacity: 0.62;
+    cursor: not-allowed;
+    filter: saturate(0.92);
+    box-shadow: none;
+}
+
+/* Sizes */
+.ozw-input--sm,
+.ozw-select--sm {
+    --ozw-input-h: var(--ozw-input-h-sm);
+}
+
+.ozw-input--md,
+.ozw-select--md {
+    --ozw-input-h: var(--ozw-input-h-md);
+}
+
+.ozw-input--lg,
+.ozw-select--lg {
+    --ozw-input-h: var(--ozw-input-h-lg);
+}
+
+/* Select tweaks */
+.ozw-select {
+    appearance: none;
+    padding-right: calc(var(--ozw-input-px) + 18px);
+    background-image:
+        linear-gradient(45deg, transparent 50%, var(--theia-icon-foreground) 50%),
+        linear-gradient(135deg, var(--theia-icon-foreground) 50%, transparent 50%);
+    background-position:
+        calc(100% - 14px) calc(50% - 1px),
+        calc(100% - 9px) calc(50% - 1px);
+    background-size:
+        5px 5px,
+        5px 5px;
+    background-repeat: no-repeat;
+}
+
+/* Color input */
+.ozw-color {
+    width: 100%;
+    height: var(--ozw-input-h, var(--ozw-input-h-md));
+    padding: 2px;
+    border-radius: var(--ozw-input-radius);
+    border: 1px solid var(--theia-input-border);
+    background: var(--theia-input-background);
+    box-shadow: var(--ozw-input-shadow);
+    box-sizing: border-box;
+    cursor: pointer;
+}
+
+.ozw-color:focus {
+    outline: none;
+    box-shadow: var(--ozw-input-shadow-focus);
+    border-color: var(--theia-focusBorder);
+}
+
+/* Side panels “standard” */
+.ozw-panel {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    overflow: hidden;
+    background: var(--theia-sideBar-background);
+}
+
+.ozw-panel-header {
+    padding: 14px 16px;
+    border-bottom: 1px solid var(--theia-border-color);
+    background: var(--theia-editorWidget-background);
+}
+
+.ozw-panel-title {
+    margin: 0 0 6px 0;
+    font-size: 13px;
+    font-weight: 550;
+    color: var(--theia-foreground);
+}
+
+.ozw-panel-subtitle {
+    font-size: 11px;
+    color: var(--theia-descriptionForeground);
+    text-transform: uppercase;
+    letter-spacing: 0.55px;
+    font-weight: 500;
+}
+
+.ozw-panel-body {
+    flex: 1;
+    overflow: auto;
+    padding: 14px 12px 18px;
+    background: var(--theia-sideBar-background);
+}
+
+.ozw-panel-section {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+}
+
+/* Canvas-specific field feel (label always visible) */
+.ozw-field--canvas .ozw-field-label {
+    color: var(--theia-foreground);
+    opacity: 0.88;
+    font-weight: 500;
+}
+

@@ -15,7 +15,7 @@
 // *****************************************************************************
 
 import { injectable, inject, postConstruct } from '@theia/core/shared/inversify';
-import { BaseWidget, Message, Saveable, SaveableSource, Widget, StatefulWidget, NavigatableWidget, WidgetManager, ApplicationShell } from '@theia/core/lib/browser';
+import { BaseWidget, Message, Saveable, SaveableSource, Widget, StatefulWidget, NavigatableWidget, WidgetManager, ApplicationShell, codicon } from '@theia/core/lib/browser';
 import { DisposableCollection, Emitter, Event } from '@theia/core/lib/common';
 import { MonacoEditorProvider } from '@theia/monaco/lib/browser/monaco-editor-provider';
 import { MonacoEditor } from '@theia/monaco/lib/browser/monaco-editor';
@@ -39,6 +39,10 @@ export interface ComponentMetadata {
     color?: string;
     padding?: string;
     margin?: string;
+    textColorMode?: 'system' | 'custom';
+    textColorLight?: string;
+    textColorDark?: string;
+    textColor?: string; // legacy
     [key: string]: unknown;
 }
 
@@ -60,6 +64,7 @@ export interface OzwComponent {
 }
 
 export type OzwEditorMode = 'canvas' | 'text' | 'split';
+type SplitViewOrder = 'canvas-first' | 'code-first';
 
 @injectable()
 export class OzwEditorWidget extends BaseWidget implements Saveable, SaveableSource, StatefulWidget, NavigatableWidget {
@@ -91,8 +96,13 @@ export class OzwEditorWidget extends BaseWidget implements Saveable, SaveableSou
     protected canvasWidget: Widget | undefined;
     protected textWidget: Widget | undefined;
     protected modeToolbar: HTMLDivElement;
+    protected canvasModeButton: HTMLButtonElement | undefined;
+    protected textModeButton: HTMLButtonElement | undefined;
+    protected splitModeButton: HTMLButtonElement | undefined;
+    protected splitSwapButton: HTMLButtonElement | undefined;
 
     protected _mode: OzwEditorMode = 'canvas';
+    protected _splitViewOrder: SplitViewOrder = 'canvas-first';
     protected _document: OzwDocument = {
         version: '1.0',
         components: [],
@@ -200,7 +210,7 @@ export class OzwEditorWidget extends BaseWidget implements Saveable, SaveableSou
         editorNode.style.overflow = 'hidden';
         editorNode.style.position = 'relative';
         this.textEditorContainer.appendChild(editorNode);
-        
+
         // Use createInline which sets suppressOpenEditorWhenDirty = true to prevent opening as separate tab
         // Use automaticLayout: true but with controlled refresh to prevent flickering
         const editor = await this.editorProvider.createInline(this._uri, editorNode, {
@@ -227,7 +237,7 @@ export class OzwEditorWidget extends BaseWidget implements Saveable, SaveableSou
             fixedOverflowWidgets: true,
             acceptSuggestionOnEnter: 'smart'
         });
-        
+
         this.textEditor = editor;
         this.toDisposeOnEditor.push(editor);
         this.toDisposeOnEditor.push(editor.onDocumentContentChanged(() => {
@@ -288,7 +298,7 @@ export class OzwEditorWidget extends BaseWidget implements Saveable, SaveableSou
         this.addClass('ozw-editor-widget');
         this.toDispose.push(this.toDisposeOnEditor);
         this.toDispose.push(this.onDirtyChangedEmitter);
-        
+
         // Cleanup timeouts and observers on dispose
         this.toDispose.push({
             dispose: () => {
@@ -337,13 +347,16 @@ export class OzwEditorWidget extends BaseWidget implements Saveable, SaveableSou
         this.modeToolbar = document.createElement('div');
         this.modeToolbar.className = 'ozw-mode-toolbar';
 
-        const canvasBtn = this.createToolbarButton('Canvas', 'canvas');
-        const textBtn = this.createToolbarButton('Text', 'text');
-        const splitBtn = this.createToolbarButton('Split', 'split');
+        this.canvasModeButton = this.createModeToolbarButton('Canvas', codicon('layout'), 'canvas');
+        this.textModeButton = this.createModeToolbarButton('Text', codicon('code'), 'text');
+        this.splitModeButton = this.createModeToolbarButton('Split', codicon('split-horizontal'), 'split');
+        this.splitSwapButton = this.createIconToolbarButton('Swap panes', codicon('arrow-swap'), () => this.toggleSplitViewOrder());
+        this.splitSwapButton.classList.add('ozw-split-swap-button');
 
-        this.modeToolbar.appendChild(canvasBtn);
-        this.modeToolbar.appendChild(textBtn);
-        this.modeToolbar.appendChild(splitBtn);
+        this.modeToolbar.appendChild(this.canvasModeButton);
+        this.modeToolbar.appendChild(this.textModeButton);
+        this.modeToolbar.appendChild(this.splitModeButton);
+        this.modeToolbar.appendChild(this.splitSwapButton);
 
         // Create canvas container
         this.canvasContainer = document.createElement('div');
@@ -369,11 +382,23 @@ export class OzwEditorWidget extends BaseWidget implements Saveable, SaveableSou
         this.node.focus({ preventScroll: true });
     }
 
-    protected createToolbarButton(label: string, mode: OzwEditorMode): HTMLButtonElement {
+    protected createModeToolbarButton(label: string, iconClass: string, mode: OzwEditorMode): HTMLButtonElement {
         const btn = document.createElement('button');
-        btn.className = 'theia-button ozw-mode-button';
-        btn.textContent = label;
+        btn.className = 'ozw-btn ozw-btn--ghost ozw-btn--icon ozw-btn--sm ozw-mode-button';
+        btn.title = label;
+        btn.setAttribute('aria-label', label);
+        btn.innerHTML = `<span class="${iconClass}"></span>`;
         btn.onclick = () => this.mode = mode;
+        return btn;
+    }
+
+    protected createIconToolbarButton(label: string, iconClass: string, onClick: () => void): HTMLButtonElement {
+        const btn = document.createElement('button');
+        btn.className = 'ozw-btn ozw-btn--ghost ozw-btn--icon ozw-btn--sm ozw-mode-button';
+        btn.title = label;
+        btn.setAttribute('aria-label', label);
+        btn.innerHTML = `<span class="${iconClass}"></span>`;
+        btn.onclick = () => onClick();
         return btn;
     }
 
@@ -393,14 +418,14 @@ export class OzwEditorWidget extends BaseWidget implements Saveable, SaveableSou
             if (this.textWidget && this.splitPanel.widgets.indexOf(this.textWidget) !== -1) {
                 this.splitPanel.layout?.removeWidget(this.textWidget);
             }
-            
+
             // Detach the split panel from the DOM first
             Widget.detach(this.splitPanel);
-            
+
             // Dispose the split panel
             this.splitPanel.dispose();
             this.splitPanel = undefined;
-            
+
             // Don't dispose the widgets - we want to reuse them
             // Just ensure containers are in the main node
             if (!this.canvasContainer.parentElement) {
@@ -444,6 +469,8 @@ export class OzwEditorWidget extends BaseWidget implements Saveable, SaveableSou
                 this.setupSplitView();
                 break;
         }
+
+        this.updateModeToolbarState();
     }
 
     protected setupSplitView(): void {
@@ -483,11 +510,20 @@ export class OzwEditorWidget extends BaseWidget implements Saveable, SaveableSou
             this.syncToText();
         }
 
-        if (this.canvasWidget) {
-            this.splitPanel.addWidget(this.canvasWidget);
-        }
-        if (this.textWidget) {
-            this.splitPanel.addWidget(this.textWidget);
+        if (this._splitViewOrder === 'canvas-first') {
+            if (this.canvasWidget) {
+                this.splitPanel.addWidget(this.canvasWidget);
+            }
+            if (this.textWidget) {
+                this.splitPanel.addWidget(this.textWidget);
+            }
+        } else {
+            if (this.textWidget) {
+                this.splitPanel.addWidget(this.textWidget);
+            }
+            if (this.canvasWidget) {
+                this.splitPanel.addWidget(this.canvasWidget);
+            }
         }
         this.splitPanel.setRelativeSizes([1, 1]);
 
@@ -497,7 +533,7 @@ export class OzwEditorWidget extends BaseWidget implements Saveable, SaveableSou
         if (this.textEditorContainer && this.textEditor) {
             // Find the actual editor node inside the container
             const editorNode = this.textEditorContainer.querySelector('div[class*="monaco"]') as HTMLElement || this.textEditorContainer;
-            
+
             // Wait for split panel to settle before setting up observer and refreshing
             requestAnimationFrame(() => {
                 requestAnimationFrame(() => {
@@ -510,6 +546,73 @@ export class OzwEditorWidget extends BaseWidget implements Saveable, SaveableSou
         }
     }
 
+    protected updateModeToolbarState(): void {
+        const setActive = (btn: HTMLButtonElement | undefined, active: boolean) => {
+            if (!btn) {
+                return;
+            }
+            if (active) {
+                btn.classList.add('ozw-mode-button--active');
+            } else {
+                btn.classList.remove('ozw-mode-button--active');
+            }
+        };
+
+        setActive(this.canvasModeButton, this._mode === 'canvas');
+        setActive(this.textModeButton, this._mode === 'text');
+        setActive(this.splitModeButton, this._mode === 'split');
+
+        if (this.splitSwapButton) {
+            const isVisible = this._mode === 'split';
+            this.splitSwapButton.style.display = isVisible ? 'inline-flex' : 'none';
+        }
+    }
+
+    protected toggleSplitViewOrder(): void {
+        this._splitViewOrder = this._splitViewOrder === 'canvas-first' ? 'code-first' : 'canvas-first';
+
+        // If we're currently in split mode, rebuild the split panel with the new order.
+        if (this._mode === 'split') {
+            this.rebuildSplitView();
+        }
+    }
+
+    protected rebuildSplitView(): void {
+        if (!this.splitPanel) {
+            this.setupSplitView();
+            return;
+        }
+
+        // Disconnect resize observer
+        if (this._resizeObserver) {
+            this._resizeObserver.disconnect();
+            this._resizeObserver = undefined;
+        }
+
+        // Remove widgets from split panel before disposing to preserve nodes
+        if (this.canvasWidget && this.splitPanel.widgets.indexOf(this.canvasWidget) !== -1) {
+            this.splitPanel.layout?.removeWidget(this.canvasWidget);
+        }
+        if (this.textWidget && this.splitPanel.widgets.indexOf(this.textWidget) !== -1) {
+            this.splitPanel.layout?.removeWidget(this.textWidget);
+        }
+
+        Widget.detach(this.splitPanel);
+        this.splitPanel.dispose();
+        this.splitPanel = undefined;
+
+        // Ensure containers are back in the main node before re-attaching split panel
+        if (!this.canvasContainer.parentElement) {
+            this.node.appendChild(this.canvasContainer);
+        }
+        if (!this.textEditorContainer.parentElement) {
+            this.node.appendChild(this.textEditorContainer);
+        }
+
+        this.setupSplitView();
+        this.updateModeToolbarState();
+    }
+
     protected renderCanvas(): void {
         console.log('🎨 renderCanvas: Starting render');
         console.log('📊 renderCanvas: Document state:', {
@@ -517,12 +620,12 @@ export class OzwEditorWidget extends BaseWidget implements Saveable, SaveableSou
             componentsCount: this._document.components.length,
             metadataKeys: Object.keys(this._document.schema.metadata).length
         });
-        
+
         // Ensure canvas container is in the DOM and visible
         if (!this.canvasContainer.parentElement) {
             this.node.appendChild(this.canvasContainer);
         }
-        
+
         // Clear previous content
         this.canvasContainer.innerHTML = '';
         console.log('🧹 renderCanvas: Canvas cleared');
@@ -550,15 +653,15 @@ export class OzwEditorWidget extends BaseWidget implements Saveable, SaveableSou
         // Click handler to deselect when clicking on empty space and ensure focus
         workspace.addEventListener('click', (e) => {
             const target = e.target as HTMLElement;
-            
+
             // Don't interfere with clicks outside the widget (like tab selection)
             if (!this.node.contains(target)) {
                 return;
             }
-            
+
             // Deselect if clicking directly on workspace, empty state, or header
             // But not if clicking on a component or its children
-            if (target === workspace || 
+            if (target === workspace ||
                 target.classList.contains('ozw-empty-state') ||
                 target.closest('.ozw-empty-state') ||
                 target.classList.contains('ozw-canvas-header') ||
@@ -639,6 +742,7 @@ export class OzwEditorWidget extends BaseWidget implements Saveable, SaveableSou
 
         const metadata = this._document.schema.metadata[node.id] || {};
         const isContainer = this.canHaveChildren(node.type);
+        let childrenHost: HTMLDivElement | null = null;
 
         // Setup drag handlers
         element.addEventListener('dragstart', (e) => this.handleComponentDragStart(e, node.id));
@@ -683,7 +787,7 @@ export class OzwEditorWidget extends BaseWidget implements Saveable, SaveableSou
             element.style.position = 'relative';
             element.style.display = 'flex';
             element.style.flexDirection = 'column';
-            element.style.gap = '8px';
+            element.style.gap = '6px'; // header + content
             element.style.padding = '12px';
             element.style.border = '2px dashed #007acc';
             element.style.borderRadius = '4px';
@@ -691,39 +795,42 @@ export class OzwEditorWidget extends BaseWidget implements Saveable, SaveableSou
             element.style.minWidth = '100px';
             element.style.backgroundColor = 'rgba(0, 122, 204, 0.05)';
 
-            // Add label for column
-            const label = document.createElement('div');
-            label.className = 'ozw-container-label';
-            label.textContent = metadata.label || 'Columna';
-            label.style.fontSize = '11px';
-            label.style.color = '#007acc';
-            label.style.fontWeight = 'bold';
-            label.style.marginBottom = '4px';
-            label.style.pointerEvents = 'none';
-            element.appendChild(label);
+            // Header (discreet) + content host
+            const header = document.createElement('div');
+            header.className = 'ozw-container-label ozw-layout-header ozw-layout-header--column';
+            const typeName = 'Columna';
+            const displayName = typeof metadata.label === 'string' ? metadata.label.trim() : '';
+            header.textContent = displayName && displayName !== typeName ? `${typeName}: ${displayName}` : typeName;
+            element.appendChild(header);
+
+            const content = document.createElement('div');
+            content.className = 'ozw-layout-content ozw-layout-content--column';
+            element.appendChild(content);
+            childrenHost = content;
         } else if (node.type === 'row') {
             element.style.position = 'relative';
             element.style.display = 'flex';
-            element.style.flexDirection = 'row';
-            element.style.gap = '8px';
-            element.style.padding = '8px';
+            element.style.flexDirection = 'column';
+            element.style.gap = '6px'; // header + content
+            element.style.padding = '8px 10px';
             element.style.border = '2px dashed #10a37f';
             element.style.borderRadius = '4px';
             element.style.minHeight = 'auto';
             element.style.minWidth = '100px';
-            element.style.alignItems = 'center';
             element.style.backgroundColor = 'rgba(16, 163, 127, 0.05)';
 
-            // Add label for row
-            const label = document.createElement('div');
-            label.className = 'ozw-container-label';
-            label.textContent = metadata.label || 'Fila';
-            label.style.fontSize = '11px';
-            label.style.color = '#10a37f';
-            label.style.fontWeight = 'bold';
-            label.style.marginBottom = '4px';
-            label.style.pointerEvents = 'none';
-            element.appendChild(label);
+            // Header row above items (more harmonious)
+            const header = document.createElement('div');
+            header.className = 'ozw-container-label ozw-layout-header ozw-layout-header--row';
+            const typeName = 'Fila';
+            const displayName = typeof metadata.label === 'string' ? metadata.label.trim() : '';
+            header.textContent = displayName && displayName !== typeName ? `${typeName}: ${displayName}` : typeName;
+            element.appendChild(header);
+
+            const content = document.createElement('div');
+            content.className = 'ozw-layout-content ozw-layout-content--row';
+            element.appendChild(content);
+            childrenHost = content;
         } else {
             // Leaf components (button, input, text, image, etc.)
             element.style.position = 'relative';
@@ -736,7 +843,7 @@ export class OzwEditorWidget extends BaseWidget implements Saveable, SaveableSou
         if (node.children && node.children.length > 0) {
             node.children.forEach(childNode => {
                 const childElement = this.createTreeNodeElement(childNode, depth + 1);
-                element.appendChild(childElement);
+                (childrenHost ?? element).appendChild(childElement);
             });
         } else if (isContainer) {
             // Add placeholder for empty containers
@@ -749,7 +856,7 @@ export class OzwEditorWidget extends BaseWidget implements Saveable, SaveableSou
             placeholder.style.fontSize = '12px';
             placeholder.style.fontStyle = 'italic';
             placeholder.style.pointerEvents = 'none'; // Let clicks pass through to parent
-            element.appendChild(placeholder);
+            (childrenHost ?? element).appendChild(placeholder);
         }
 
         // Highlight if selected
@@ -794,7 +901,36 @@ export class OzwEditorWidget extends BaseWidget implements Saveable, SaveableSou
 
         switch (type) {
             case 'button':
-                element.innerHTML = `<button class="theia-button ozw-modern-button">${metadata.label || 'Button'}</button>`;
+                // Custom button system (avoid `theia-button` for long-term visual consistency)
+                const rawVariant = typeof metadata.variant === 'string' ? metadata.variant : 'primary';
+                const variant = ((): string => {
+                    switch (rawVariant) {
+                        case 'primary':
+                        case 'secondary':
+                        case 'success':
+                        case 'danger':
+                        case 'ghost':
+                            return rawVariant;
+                        default:
+                            return 'primary';
+                    }
+                })();
+
+                const rawSize = typeof metadata.size === 'string' ? metadata.size : 'medium';
+                const size = ((): string => {
+                    switch (rawSize) {
+                        case 'small':
+                            return 'sm';
+                        case 'medium':
+                            return 'md';
+                        case 'large':
+                            return 'lg';
+                        default:
+                            return 'md';
+                    }
+                })();
+
+                element.innerHTML = `<button class="ozw-btn ozw-btn--${variant} ozw-btn--${size}">${metadata.label || 'Button'}</button>`;
                 element.style.backgroundColor = 'transparent';
                 element.style.padding = '0';
                 element.style.height = baseHeight;
@@ -802,12 +938,33 @@ export class OzwEditorWidget extends BaseWidget implements Saveable, SaveableSou
                 element.style.alignItems = 'center';
                 break;
             case 'input':
-                element.innerHTML = `<input type="text" class="ozw-modern-input" placeholder="${metadata.label || 'Input'}" />`;
+                // Inputs in canvas always show their label (not just placeholder)
+                const rawInputType = typeof metadata.inputType === 'string' ? metadata.inputType : 'text';
+                const inputType = ((): string => {
+                    switch (rawInputType) {
+                        case 'text':
+                        case 'email':
+                        case 'password':
+                        case 'number':
+                            return rawInputType;
+                        default:
+                            return 'text';
+                    }
+                })();
+
+                const label = (metadata.label as string) || 'Input';
+                const placeholder = (metadata.placeholder as string) || '';
+
+                element.innerHTML = `
+                    <div class="ozw-field ozw-field--canvas">
+                        <div class="ozw-field-label">${label}</div>
+                        <input type="${inputType}" class="ozw-input ozw-input--md" placeholder="${placeholder}" />
+                    </div>
+                `;
                 element.style.backgroundColor = 'transparent';
                 element.style.padding = '0';
-                element.style.height = baseHeight;
-                element.style.display = 'flex';
-                element.style.alignItems = 'center';
+                element.style.height = 'auto';
+                element.style.display = 'block';
                 break;
             case 'text':
                 element.innerHTML = `<p class="ozw-modern-text">${metadata.label || 'Text'}</p>`;
@@ -816,17 +973,39 @@ export class OzwEditorWidget extends BaseWidget implements Saveable, SaveableSou
                 element.style.height = baseHeight;
                 element.style.display = 'flex';
                 element.style.alignItems = 'center';
-                // Aplicar fontSize y textColor si están definidos
+                // Aplicar fontSize, fontWeight y colores (system/custom light/dark)
                 const textElement = element.querySelector('p.ozw-modern-text') as HTMLElement;
                 if (textElement) {
                     if (metadata.fontSize) {
                         textElement.style.fontSize = metadata.fontSize as string;
                     }
-                    if (metadata.textColor) {
-                        textElement.style.color = metadata.textColor as string;
-                    }
                     if (metadata.fontWeight) {
                         textElement.style.fontWeight = metadata.fontWeight as string;
+                    }
+
+                    const mode = (metadata.textColorMode === 'system' || metadata.textColorMode === 'custom')
+                        ? metadata.textColorMode
+                        : undefined;
+
+                    const legacyTextColor = typeof metadata.textColor === 'string' ? metadata.textColor : undefined;
+                    const light = typeof metadata.textColorLight === 'string' ? metadata.textColorLight : legacyTextColor;
+                    const dark = typeof metadata.textColorDark === 'string' ? metadata.textColorDark : legacyTextColor;
+
+                    const isCustom = mode === 'custom' || (!mode && (typeof light === 'string' || typeof dark === 'string'));
+
+                    // Ensure theme-aware behavior (no inline color); rely on CSS to pick light/dark var.
+                    textElement.style.removeProperty('color');
+
+                    if (isCustom) {
+                        if (typeof light === 'string' && light.length > 0) {
+                            textElement.style.setProperty('--ozw-text-color-light', light);
+                        }
+                        if (typeof dark === 'string' && dark.length > 0) {
+                            textElement.style.setProperty('--ozw-text-color-dark', dark);
+                        }
+                    } else {
+                        textElement.style.removeProperty('--ozw-text-color-light');
+                        textElement.style.removeProperty('--ozw-text-color-dark');
                     }
                 }
                 break;
@@ -872,13 +1051,13 @@ export class OzwEditorWidget extends BaseWidget implements Saveable, SaveableSou
         try {
             const content = this.textEditor.document.getText().trim();
             console.log('📥 syncFromText: Content length:', content.length);
-            
+
             // Skip if content is empty
             if (!content) {
                 console.log('⚠️ syncFromText: Content is empty');
                 return;
             }
-            
+
             // Validate JSON before parsing
             let parsed: any;
             try {
@@ -888,7 +1067,7 @@ export class OzwEditorWidget extends BaseWidget implements Saveable, SaveableSou
                 console.warn('❌ Invalid JSON in text editor, skipping sync:', parseError);
                 return;
             }
-            
+
             console.log('✅ syncFromText: JSON parsed successfully');
             console.log('📋 syncFromText: Parsed structure:', {
                 hasVersion: !!parsed.version,
@@ -898,32 +1077,32 @@ export class OzwEditorWidget extends BaseWidget implements Saveable, SaveableSou
                 treeLength: parsed.schema?.tree?.length || 0,
                 metadataKeys: parsed.schema?.metadata ? Object.keys(parsed.schema.metadata).length : 0
             });
-            
+
             // Ensure schema exists for backwards compatibility
             if (!parsed.schema) {
                 parsed.schema = { tree: [], metadata: {} };
             }
-            
+
             // Ensure schema.tree is an array
             if (!Array.isArray(parsed.schema.tree)) {
                 parsed.schema.tree = [];
             }
-            
+
             // Ensure schema.metadata is an object
             if (!parsed.schema.metadata || typeof parsed.schema.metadata !== 'object') {
                 parsed.schema.metadata = {};
             }
-            
+
             // Ensure components array exists
             if (!Array.isArray(parsed.components)) {
                 parsed.components = [];
             }
-            
+
             // Ensure version exists
             if (!parsed.version) {
                 parsed.version = '1.0';
             }
-            
+
             // CRITICAL: Sync schema.metadata from components array
             // When editing JSON, users might only update components[].properties
             // but renderCanvas() uses schema.metadata, so we need to sync them
@@ -940,7 +1119,7 @@ export class OzwEditorWidget extends BaseWidget implements Saveable, SaveableSou
                 });
                 console.log('🔄 syncFromText: Synced schema.metadata from components array');
             }
-            
+
             // Update document
             this._document = parsed as OzwDocument;
             console.log('✅ syncFromText: Document updated');
@@ -950,7 +1129,7 @@ export class OzwEditorWidget extends BaseWidget implements Saveable, SaveableSou
                 treeLength: this._document.schema.tree.length,
                 metadataKeys: Object.keys(this._document.schema.metadata).length
             });
-            
+
             // Log a sample to verify metadata is correct
             if (this._document.components.length > 0) {
                 const firstComponent = this._document.components[0];
@@ -961,7 +1140,7 @@ export class OzwEditorWidget extends BaseWidget implements Saveable, SaveableSou
                     metadataLabel: this._document.schema.metadata[firstComponent.id]?.label
                 });
             }
-            
+
             // ALWAYS re-render canvas if in canvas or split mode
             // Use requestAnimationFrame to ensure DOM is ready
             if (this._mode === 'canvas' || this._mode === 'split') {
@@ -988,24 +1167,24 @@ export class OzwEditorWidget extends BaseWidget implements Saveable, SaveableSou
         }
         const content = JSON.stringify(this._document, null, 2);
         const currentContent = this.textEditor.document.getText();
-        
+
         if (content === currentContent) {
             console.log('⏭️ syncToText: No changes, skipping update');
             return; // No changes, skip update
         }
-        
+
         console.log('📤 syncToText: Updating text editor, content length:', content.length);
-        
+
         // Save cursor position and selection before updating
         const editor = this.textEditor.getControl();
         const position = editor.getPosition();
         const selection = editor.getSelection();
-        
+
         this._isSyncingToText = true;
         try {
             const model = this.textEditor.document.textEditorModel;
             const fullRange = model.getFullModelRange();
-            
+
             // Use pushEditOperations for better cursor preservation
             model.pushEditOperations(
                 [],
@@ -1015,9 +1194,9 @@ export class OzwEditorWidget extends BaseWidget implements Saveable, SaveableSou
                 }],
                 () => null
             );
-            
+
             console.log('✅ syncToText: Text editor updated');
-            
+
             // Restore cursor position if still valid
             if (position) {
                 const lineCount = model.getLineCount();
@@ -1027,7 +1206,7 @@ export class OzwEditorWidget extends BaseWidget implements Saveable, SaveableSou
                         column: Math.min(position.column, model.getLineMaxColumn(position.lineNumber))
                     };
                     editor.setPosition(newPosition);
-                    
+
                     // Restore selection if it was a range selection
                     if (selection && !selection.isEmpty()) {
                         const startLine = Math.min(selection.startLineNumber, lineCount);
@@ -1175,22 +1354,22 @@ export class OzwEditorWidget extends BaseWidget implements Saveable, SaveableSou
 
     protected override onResize(msg: Widget.ResizeMessage): void {
         super.onResize(msg);
-        
+
         // Only refresh if dimensions actually changed to prevent flickering
         const currentWidth = msg.width;
         const currentHeight = msg.height;
-        const hasChanged = !this._lastResizeDimensions || 
-            this._lastResizeDimensions.width !== currentWidth || 
+        const hasChanged = !this._lastResizeDimensions ||
+            this._lastResizeDimensions.width !== currentWidth ||
             this._lastResizeDimensions.height !== currentHeight;
-        
+
         if (hasChanged) {
             this._lastResizeDimensions = { width: currentWidth, height: currentHeight };
-            
+
             // Update split panel immediately
             if (this.splitPanel) {
                 this.splitPanel.update();
             }
-            
+
             // Debounce editor refresh calls to prevent rapid successive refreshes
             // The ResizeObserver will handle editor refresh in split mode
             if (this._mode !== 'split') {
@@ -1207,7 +1386,8 @@ export class OzwEditorWidget extends BaseWidget implements Saveable, SaveableSou
     storeState(): object {
         return {
             uri: this._uri.toString(),
-            mode: this._mode
+            mode: this._mode,
+            splitViewOrder: this._splitViewOrder
         };
     }
 
@@ -1224,6 +1404,13 @@ export class OzwEditorWidget extends BaseWidget implements Saveable, SaveableSou
 
             if (oldState.mode) {
                 this._mode = oldState.mode;
+            }
+
+            if ('splitViewOrder' in oldState && (oldState as any).splitViewOrder) {
+                const order = (oldState as any).splitViewOrder;
+                if (order === 'canvas-first' || order === 'code-first') {
+                    this._splitViewOrder = order;
+                }
             }
         }
     }
@@ -1822,7 +2009,7 @@ export class OzwEditorWidget extends BaseWidget implements Saveable, SaveableSou
 
     protected handlePropertyChange(componentId: string, property: string, value: unknown): void {
         console.log('🔧 handlePropertyChange:', { componentId, property, value, mode: this._mode });
-        
+
         // Update metadata
         if (!this._document.schema.metadata[componentId]) {
             this._document.schema.metadata[componentId] = {};

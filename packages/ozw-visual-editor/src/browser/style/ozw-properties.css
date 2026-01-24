@@ -19,7 +19,7 @@
     flex-direction: column;
     height: 100%;
     overflow: hidden;
-    background-color: var(--theia-editor-background);
+    background-color: var(--theia-sideBar-background);
 }
 
 .ozw-properties-empty {
@@ -44,16 +44,9 @@
 }
 
 .ozw-properties-header {
-    padding: 16px;
+    padding: 0; /* handled by .ozw-panel-header */
     border-bottom: 1px solid var(--theia-border-color);
-    background-color: var(--theia-sideBar-background);
-}
-
-.ozw-properties-header h3 {
-    margin: 0 0 4px 0;
-    font-size: 14px;
-    font-weight: 600;
-    color: var(--theia-foreground);
+    background-color: transparent;
 }
 
 .ozw-properties-type {
@@ -67,29 +60,25 @@
 .ozw-properties-content {
     flex: 1;
     overflow-y: auto;
-    padding: 12px;
+    padding: 0; /* handled by .ozw-panel-body */
 }
 
 .ozw-property-row {
-    display: flex;
-    flex-direction: column;
-    margin-bottom: 16px;
+    margin-bottom: 0; /* spacing comes from .ozw-panel-section gap */
 }
 
 .ozw-property-label {
-    font-size: 12px;
-    font-weight: 500;
-    color: var(--theia-foreground);
-    margin-bottom: 6px;
+    /* now styled by .ozw-field-label */
+    margin-bottom: 0;
 }
 
 .ozw-property-input {
     width: 100%;
-    font-size: 12px;
+    font-size: 12.5px;
 }
 
 .ozw-property-input[type="color"] {
-    height: 32px;
-    padding: 2px;
-    cursor: pointer;
+    /* handled by .ozw-color */
+    height: auto;
+    padding: 0;
 }

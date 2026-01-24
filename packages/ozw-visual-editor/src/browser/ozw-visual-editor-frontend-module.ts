@@ -17,6 +17,8 @@
 import '../../src/browser/style/ozw-editor.css';
 import '../../src/browser/style/ozw-toolbox.css';
 import '../../src/browser/style/ozw-properties.css';
+import '../../src/browser/style/ozw-buttons.css';
+import '../../src/browser/style/ozw-forms.css';
 
 import { ContainerModule } from '@theia/core/shared/inversify';
 import { OpenHandler, WidgetFactory, NavigatableWidgetOptions } from '@theia/core/lib/browser';

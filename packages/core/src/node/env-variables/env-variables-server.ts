@@ -16,8 +16,8 @@
 
 import { join } from 'path';
 import { homedir } from 'os';
+import * as fs from 'fs';
 import { injectable } from 'inversify';
-import * as drivelist from 'drivelist';
 import { pathExists, mkdir } from 'fs-extra';
 import { EnvVariable, EnvVariablesServer } from '../../common/env-variables';
 import { isWindows } from '../../common/os';
@@ -93,13 +93,65 @@ export class EnvVariablesServerImpl implements EnvVariablesServer {
     }
 
     async getDrives(): Promise<string[]> {
+        // NOTE: On some Linux distros/kernels, the native `drivelist` module has been observed to crash the Node
+        // process (SIGSEGV) even when just requiring it. To keep the backend stable in browser deployments,
+        // we avoid `drivelist` on Linux and instead return a conservative list of mount points.
+        if (process.platform === 'linux') {
+            return this.getLinuxDrives();
+        }
+
         const uris: string[] = [];
+        // Load `drivelist` lazily to avoid crashing the backend at startup.
+        // eslint-disable-next-line @typescript-eslint/no-var-requires
+        const drivelist = require('drivelist') as typeof import('drivelist');
         const drives = await drivelist.list();
         for (const drive of drives) {
             for (const mountpoint of drive.mountpoints) {
                 if (this.filterHiddenPartitions(mountpoint.path)) {
                     uris.push(FileUri.create(mountpoint.path).toString());
                 }
+            }
+        }
+        return uris;
+    }
+
+    protected async getLinuxDrives(): Promise<string[]> {
+        const uris: string[] = [];
+        const mountpoints = new Set<string>();
+
+        // Always include root.
+        mountpoints.add('/');
+
+        // Prefer "user-facing" mount points.
+        try {
+            const mounts = await fs.promises.readFile('/proc/mounts', 'utf8');
+            for (const line of mounts.split('\n')) {
+                const parts = line.trim().split(' ');
+                if (parts.length < 2) {
+                    continue;
+                }
+                // /proc/mounts uses escaped spaces as \040.
+                const mount = parts[1].replace(/\\040/g, ' ');
+                if (mount.startsWith('/run/media/') || mount.startsWith('/media/') || mount.startsWith('/mnt/')) {
+                    mountpoints.add(mount);
+                }
+            }
+        } catch {
+            // ignore
+        }
+
+        // Include /home when present (common "drive-like" entry).
+        try {
+            if (await pathExists('/home')) {
+                mountpoints.add('/home');
+            }
+        } catch {
+            // ignore
+        }
+
+        for (const mountpoint of mountpoints) {
+            if (this.filterHiddenPartitions(mountpoint)) {
+                uris.push(FileUri.create(mountpoint).toString());
             }
         }
         return uris;

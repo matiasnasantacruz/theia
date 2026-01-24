@@ -1,0 +1,203 @@
+/* *****************************************************************************
+ * Copyright (C) 2026 and others.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Eclipse Public License v. 2.0 which is available at
+ * http://www.eclipse.org/legal/epl-2.0.
+ *
+ * This Source Code may also be made available under the following Secondary
+ * Licenses when the conditions for such availability set forth in the Eclipse
+ * Public License v. 2.0 are satisfied: GNU General Public License, version 2
+ * with the GNU Classpath Exception which is available at
+ * https://www.gnu.org/software/classpath/license.html.
+ *
+ * SPDX-License-Identifier: EPL-2.0 OR GPL-2.0-only WITH Classpath-exception-2.0
+ * *****************************************************************************/
+
+/*
+ * OZW Button System
+ * - Single base class: .ozw-btn
+ * - Variants: --primary | --secondary | --ghost | --success | --danger
+ * - Sizes: --sm | --md | --lg
+ * - Layout: --block (full width)
+ * - States: :hover, :active, :focus-visible, [disabled], [aria-disabled="true"]
+ *
+ * Design goals:
+ * - Elegant, consistent, and theme-aware (uses Theia CSS variables)
+ * - Accessible focus ring and disabled semantics
+ * - Safe defaults for long-term maintenance (tokens + small surface area)
+ */
+
+:root {
+    --ozw-btn-radius: 8px;
+    --ozw-btn-shadow: 0 1px 2px rgba(0, 0, 0, 0.18);
+    --ozw-btn-shadow-hover: 0 3px 10px rgba(0, 0, 0, 0.22);
+
+    --ozw-btn-h-sm: 28px;
+    --ozw-btn-h-md: 34px;
+    --ozw-btn-h-lg: 40px;
+
+    --ozw-btn-px-sm: 10px;
+    --ozw-btn-px-md: 12px;
+    --ozw-btn-px-lg: 14px;
+
+    --ozw-btn-fs-sm: 12px;
+    --ozw-btn-fs-md: 13px;
+    --ozw-btn-fs-lg: 14px;
+}
+
+.ozw-btn {
+    -webkit-tap-highlight-color: transparent;
+    appearance: none;
+    border: 1px solid var(--ozw-btn-border, transparent);
+    border-radius: var(--ozw-btn-radius);
+    background: var(--ozw-btn-bg, var(--theia-button-background));
+    color: var(--ozw-btn-fg, var(--theia-button-foreground));
+    box-shadow: var(--ozw-btn-shadow);
+
+    height: var(--ozw-btn-h, var(--ozw-btn-h-md));
+    padding: 0 var(--ozw-btn-px, var(--ozw-btn-px-md));
+
+    font-size: var(--ozw-btn-fs, var(--ozw-btn-fs-md));
+    font-weight: 500;
+    line-height: 1;
+    letter-spacing: 0.1px;
+    text-rendering: geometricPrecision;
+
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+
+    cursor: pointer;
+    user-select: none;
+    white-space: nowrap;
+    box-sizing: border-box;
+
+    transition:
+        background-color 120ms ease,
+        border-color 120ms ease,
+        box-shadow 120ms ease,
+        transform 80ms ease,
+        filter 120ms ease;
+}
+
+.ozw-btn:hover {
+    background: var(--ozw-btn-bg-hover, var(--theia-button-hoverBackground));
+    box-shadow: var(--ozw-btn-shadow-hover);
+}
+
+.ozw-btn:active {
+    background: var(--ozw-btn-bg-active, var(--theia-button-activeBackground, var(--theia-button-hoverBackground)));
+    transform: translateY(0.5px);
+    box-shadow: var(--ozw-btn-shadow);
+}
+
+.ozw-btn:focus {
+    outline: none;
+}
+
+.ozw-btn:focus-visible {
+    box-shadow:
+        0 0 0 2px var(--theia-editor-background),
+        0 0 0 4px var(--theia-focusBorder);
+}
+
+.ozw-btn[disabled],
+.ozw-btn[aria-disabled="true"] {
+    cursor: not-allowed;
+    opacity: 0.55;
+    filter: saturate(0.9);
+    box-shadow: none;
+    transform: none;
+}
+
+.ozw-btn[disabled]:hover,
+.ozw-btn[aria-disabled="true"]:hover {
+    background: var(--ozw-btn-bg, var(--theia-button-background));
+}
+
+/* Sizes */
+.ozw-btn--sm {
+    --ozw-btn-h: var(--ozw-btn-h-sm);
+    --ozw-btn-px: var(--ozw-btn-px-sm);
+    --ozw-btn-fs: var(--ozw-btn-fs-sm);
+    --ozw-btn-radius: 7px;
+}
+
+.ozw-btn--md {
+    --ozw-btn-h: var(--ozw-btn-h-md);
+    --ozw-btn-px: var(--ozw-btn-px-md);
+    --ozw-btn-fs: var(--ozw-btn-fs-md);
+}
+
+.ozw-btn--lg {
+    --ozw-btn-h: var(--ozw-btn-h-lg);
+    --ozw-btn-px: var(--ozw-btn-px-lg);
+    --ozw-btn-fs: var(--ozw-btn-fs-lg);
+    --ozw-btn-radius: 10px;
+}
+
+/* Layout */
+.ozw-btn--block {
+    width: 100%;
+}
+
+/* Variants */
+.ozw-btn--primary {
+    --ozw-btn-bg: var(--theia-button-background);
+    --ozw-btn-fg: var(--theia-button-foreground);
+    --ozw-btn-bg-hover: var(--theia-button-hoverBackground);
+    --ozw-btn-bg-active: var(--theia-button-activeBackground, var(--theia-button-hoverBackground));
+    --ozw-btn-border: var(--theia-button-border, transparent);
+}
+
+.ozw-btn--secondary {
+    --ozw-btn-bg: var(--theia-editorWidget-background);
+    --ozw-btn-fg: var(--theia-foreground);
+    --ozw-btn-bg-hover: var(--theia-list-hoverBackground);
+    --ozw-btn-bg-active: var(--theia-list-activeSelectionBackground, var(--theia-list-hoverBackground));
+    --ozw-btn-border: var(--theia-border-color);
+}
+
+.ozw-btn--ghost {
+    --ozw-btn-bg: transparent;
+    --ozw-btn-fg: var(--theia-foreground);
+    --ozw-btn-bg-hover: rgba(127, 127, 127, 0.14);
+    --ozw-btn-bg-active: rgba(127, 127, 127, 0.2);
+    --ozw-btn-border: rgba(127, 127, 127, 0.28);
+    box-shadow: none;
+}
+
+.ozw-btn--ghost:hover {
+    box-shadow: none;
+}
+
+.ozw-btn--success {
+    --ozw-btn-bg: rgba(46, 204, 113, 0.9);
+    --ozw-btn-fg: #fff;
+    --ozw-btn-bg-hover: rgba(46, 204, 113, 1);
+    --ozw-btn-bg-active: rgba(39, 174, 96, 1);
+    --ozw-btn-border: rgba(39, 174, 96, 0.6);
+}
+
+.ozw-btn--danger {
+    --ozw-btn-bg: rgba(231, 76, 60, 0.92);
+    --ozw-btn-fg: #fff;
+    --ozw-btn-bg-hover: rgba(231, 76, 60, 1);
+    --ozw-btn-bg-active: rgba(192, 57, 43, 1);
+    --ozw-btn-border: rgba(192, 57, 43, 0.6);
+}
+
+/* Subtle “icon button” helper (optional) */
+.ozw-btn--icon {
+    padding: 0;
+    width: var(--ozw-btn-h, var(--ozw-btn-h-md));
+}
+
+/* If you put a font-awesome / codicon inside */
+.ozw-btn>i,
+.ozw-btn>.codicon {
+    font-size: 1.05em;
+    line-height: 1;
+}

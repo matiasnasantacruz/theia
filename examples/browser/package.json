@@ -69,6 +69,7 @@
     "@theia/notebook": "1.67.0",
     "@theia/outline-view": "1.67.0",
     "@theia/output": "1.67.0",
+    "@theia/ozw-visual-editor": "1.67.0",
     "@theia/plugin-dev": "1.67.0",
     "@theia/plugin-ext": "1.67.0",
     "@theia/plugin-ext-headless": "1.67.0",

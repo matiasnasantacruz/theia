@@ -123,7 +123,47 @@ async function theiaCli(): Promise<void> {
             // Disable this command's `--help` option so that it is forwarded to Theia's CLI
             builder: cli => cli.help(false) as yargs.Argv,
             handler: async ({ theiaArgs }) => {
-                manager.start(toStringArray(theiaArgs));
+                const child = manager.start(toStringArray(theiaArgs));
+
+                // Forward output to the parent process so users can see logs.
+                child.stdout?.pipe(process.stdout);
+                child.stderr?.pipe(process.stderr);
+
+                const killChild = (signal: NodeJS.Signals = 'SIGTERM') => {
+                    if (!child.pid) {
+                        return;
+                    }
+                    try {
+                        // On UNIX, Theia starts the backend as a process group leader (detached),
+                        // so kill the entire group.
+                        if (process.platform !== 'win32') {
+                            process.kill(-child.pid, signal);
+                        } else {
+                            child.kill(signal);
+                        }
+                    } catch {
+                        // ignore
+                    }
+                };
+
+                process.once('SIGINT', () => {
+                    killChild('SIGINT');
+                });
+                process.once('SIGTERM', () => {
+                    killChild('SIGTERM');
+                });
+                process.once('exit', () => {
+                    killChild('SIGTERM');
+                });
+
+                // Keep the CLI alive while the backend is running and propagate the exit code.
+                await new Promise<void>((resolve, reject) => {
+                    child.once('error', reject);
+                    child.once('close', (code, signal) => {
+                        process.exitCode = code ?? (signal ? 1 : 0);
+                        resolve();
+                    });
+                });
             }
         })
         .command({

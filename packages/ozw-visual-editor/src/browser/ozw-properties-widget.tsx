@@ -20,6 +20,8 @@ import * as React from '@theia/core/shared/react';
 import { createRoot, Root } from '@theia/core/shared/react-dom/client';
 import { ComponentMetadata } from './ozw-editor-widget';
 
+type TextColorMode = 'system' | 'custom';
+
 // Componente de input que preserva la posición del cursor
 interface ControlledInputProps {
     value: string;
@@ -135,13 +137,15 @@ export class OzwPropertiesWidget extends BaseWidget {
         }
 
         return (
-            <div className='ozw-properties-container'>
-                <div className='ozw-properties-header'>
-                    <h3>{this.getComponentDisplayName()}</h3>
-                    <span className='ozw-properties-type'>{this.selectedComponentType}</span>
+            <div className='ozw-panel ozw-properties-container'>
+                <div className='ozw-panel-header ozw-properties-header'>
+                    <h3 className='ozw-panel-title'>{this.getComponentDisplayName()}</h3>
+                    <span className='ozw-panel-subtitle ozw-properties-type'>{this.selectedComponentType}</span>
                 </div>
-                <div className='ozw-properties-content'>
-                    {this.renderProperties()}
+                <div className='ozw-panel-body ozw-properties-content'>
+                    <div className='ozw-panel-section'>
+                        {this.renderProperties()}
+                    </div>
                 </div>
             </div>
         );
@@ -158,13 +162,13 @@ export class OzwPropertiesWidget extends BaseWidget {
 
         // Label property (all components have this)
         properties.push(
-            <div key="label" className='ozw-property-row'>
-                <label className='ozw-property-label'>Label</label>
+            <div key="label" className='ozw-field ozw-property-row'>
+                <label className='ozw-field-label ozw-property-label'>Label</label>
                 <ControlledInput
                     value={this.selectedComponentMetadata.label as string || ''}
                     onChange={(value) => this.handlePropertyChange('label', value)}
                     placeholder="Component label"
-                    className='theia-input ozw-property-input'
+                    className='ozw-input ozw-input--md ozw-property-input'
                 />
             </div>
         );
@@ -172,10 +176,10 @@ export class OzwPropertiesWidget extends BaseWidget {
         // Type-specific properties
         if (this.selectedComponentType === 'button') {
             properties.push(
-                <div key="variant" className='ozw-property-row'>
-                    <label className='ozw-property-label'>Variant</label>
+                <div key="variant" className='ozw-field ozw-property-row'>
+                    <label className='ozw-field-label ozw-property-label'>Variant</label>
                     <select
-                        className='theia-select ozw-property-input'
+                        className='ozw-select ozw-select--md ozw-property-input'
                         value={this.selectedComponentMetadata.variant as string || 'primary'}
                         onChange={(e) => this.handlePropertyChange('variant', e.target.value)}
                     >
@@ -187,10 +191,10 @@ export class OzwPropertiesWidget extends BaseWidget {
                 </div>
             );
             properties.push(
-                <div key="size" className='ozw-property-row'>
-                    <label className='ozw-property-label'>Size</label>
+                <div key="size" className='ozw-field ozw-property-row'>
+                    <label className='ozw-field-label ozw-property-label'>Size</label>
                     <select
-                        className='theia-select ozw-property-input'
+                        className='ozw-select ozw-select--md ozw-property-input'
                         value={this.selectedComponentMetadata.size as string || 'medium'}
                         onChange={(e) => this.handlePropertyChange('size', e.target.value)}
                     >
@@ -204,21 +208,21 @@ export class OzwPropertiesWidget extends BaseWidget {
 
         if (this.selectedComponentType === 'input') {
             properties.push(
-                <div key="placeholder" className='ozw-property-row'>
-                    <label className='ozw-property-label'>Placeholder</label>
+                <div key="placeholder" className='ozw-field ozw-property-row'>
+                    <label className='ozw-field-label ozw-property-label'>Placeholder</label>
                     <ControlledInput
                         value={this.selectedComponentMetadata.placeholder as string || ''}
                         onChange={(value) => this.handlePropertyChange('placeholder', value)}
                         placeholder="Enter placeholder text"
-                        className='theia-input ozw-property-input'
+                        className='ozw-input ozw-input--md ozw-property-input'
                     />
                 </div>
             );
             properties.push(
-                <div key="inputType" className='ozw-property-row'>
-                    <label className='ozw-property-label'>Input Type</label>
+                <div key="inputType" className='ozw-field ozw-property-row'>
+                    <label className='ozw-field-label ozw-property-label'>Input Type</label>
                     <select
-                        className='theia-select ozw-property-input'
+                        className='ozw-select ozw-select--md ozw-property-input'
                         value={this.selectedComponentMetadata.inputType as string || 'text'}
                         onChange={(e) => this.handlePropertyChange('inputType', e.target.value)}
                     >
@@ -233,10 +237,10 @@ export class OzwPropertiesWidget extends BaseWidget {
 
         if (this.selectedComponentType === 'text') {
             properties.push(
-                <div key="fontSize" className='ozw-property-row'>
-                    <label className='ozw-property-label'>Font Size</label>
+                <div key="fontSize" className='ozw-field ozw-property-row'>
+                    <label className='ozw-field-label ozw-property-label'>Font Size</label>
                     <select
-                        className='theia-select ozw-property-input'
+                        className='ozw-select ozw-select--md ozw-property-input'
                         value={this.selectedComponentMetadata.fontSize as string || '13px'}
                         onChange={(e) => this.handlePropertyChange('fontSize', e.target.value)}
                     >
@@ -248,10 +252,10 @@ export class OzwPropertiesWidget extends BaseWidget {
                 </div>
             );
             properties.push(
-                <div key="fontWeight" className='ozw-property-row'>
-                    <label className='ozw-property-label'>Font Weight</label>
+                <div key="fontWeight" className='ozw-field ozw-property-row'>
+                    <label className='ozw-field-label ozw-property-label'>Font Weight</label>
                     <select
-                        className='theia-select ozw-property-input'
+                        className='ozw-select ozw-select--md ozw-property-input'
                         value={this.selectedComponentMetadata.fontWeight as string || 'normal'}
                         onChange={(e) => this.handlePropertyChange('fontWeight', e.target.value)}
                     >
@@ -261,26 +265,93 @@ export class OzwPropertiesWidget extends BaseWidget {
                     </select>
                 </div>
             );
+
+            const isValidHex6 = (value: unknown): value is string =>
+                typeof value === 'string' && /^#[0-9a-fA-F]{6}$/.test(value);
+
+            const legacyTextColor = isValidHex6(this.selectedComponentMetadata.textColor) ? this.selectedComponentMetadata.textColor : undefined;
+            const storedMode = this.selectedComponentMetadata.textColorMode;
+            const textColorMode: TextColorMode = storedMode === 'system' || storedMode === 'custom'
+                ? storedMode
+                : (legacyTextColor ||
+                    isValidHex6(this.selectedComponentMetadata.textColorLight) ||
+                    isValidHex6(this.selectedComponentMetadata.textColorDark))
+                    ? 'custom'
+                    : 'system';
+
+            const textColorLight = isValidHex6(this.selectedComponentMetadata.textColorLight)
+                ? this.selectedComponentMetadata.textColorLight
+                : (legacyTextColor ?? '#000000');
+
+            const textColorDark = isValidHex6(this.selectedComponentMetadata.textColorDark)
+                ? this.selectedComponentMetadata.textColorDark
+                : (legacyTextColor ?? '#ffffff');
+
             properties.push(
-                <div key="textColor" className='ozw-property-row'>
-                    <label className='ozw-property-label'>Text Color</label>
-                    <input
-                        type="color"
-                        className='ozw-property-input'
-                        value={this.selectedComponentMetadata.textColor as string || '#000000'}
-                        onChange={(e) => this.handlePropertyChange('textColor', e.target.value)}
-                    />
+                <div key="textColorMode" className='ozw-field ozw-property-row'>
+                    <label className='ozw-field-label ozw-property-label'>Text Color</label>
+                    <select
+                        className='ozw-select ozw-select--md ozw-property-input'
+                        value={textColorMode}
+                        onChange={(e) => {
+                            const value = e.target.value as TextColorMode;
+                            this.handlePropertyChange('textColorMode', value);
+                            if (value === 'custom') {
+                                // Initialize palettes if missing so custom takes effect immediately.
+                                if (!isValidHex6(this.selectedComponentMetadata.textColorLight)) {
+                                    this.handlePropertyChange('textColorLight', textColorLight);
+                                }
+                                if (!isValidHex6(this.selectedComponentMetadata.textColorDark)) {
+                                    this.handlePropertyChange('textColorDark', textColorDark);
+                                }
+                            }
+                        }}
+                    >
+                        <option value="system">System theme</option>
+                        <option value="custom">Custom</option>
+                    </select>
                 </div>
             );
+
+            if (textColorMode === 'custom') {
+                properties.push(
+                    <div key="textColorLight" className='ozw-field ozw-property-row'>
+                        <label className='ozw-field-label ozw-property-label'>Text Color (Light)</label>
+                        <input
+                            type="color"
+                            className='ozw-color ozw-property-input'
+                            value={textColorLight}
+                            onChange={(e) => {
+                                this.handlePropertyChange('textColorMode', 'custom');
+                                this.handlePropertyChange('textColorLight', e.target.value);
+                            }}
+                        />
+                    </div>
+                );
+                properties.push(
+                    <div key="textColorDark" className='ozw-field ozw-property-row'>
+                        <label className='ozw-field-label ozw-property-label'>Text Color (Dark)</label>
+                        <input
+                            type="color"
+                            className='ozw-color ozw-property-input'
+                            value={textColorDark}
+                            onChange={(e) => {
+                                this.handlePropertyChange('textColorMode', 'custom');
+                                this.handlePropertyChange('textColorDark', e.target.value);
+                            }}
+                        />
+                    </div>
+                );
+            }
         }
 
         // Layout properties for containers
         if (this.selectedComponentType === 'column' || this.selectedComponentType === 'row') {
             properties.push(
-                <div key="gap" className='ozw-property-row'>
-                    <label className='ozw-property-label'>Gap</label>
+                <div key="gap" className='ozw-field ozw-property-row'>
+                    <label className='ozw-field-label ozw-property-label'>Gap</label>
                     <select
-                        className='theia-select ozw-property-input'
+                        className='ozw-select ozw-select--md ozw-property-input'
                         value={this.selectedComponentMetadata.gap as string || '8px'}
                         onChange={(e) => this.handlePropertyChange('gap', e.target.value)}
                     >
@@ -293,10 +364,10 @@ export class OzwPropertiesWidget extends BaseWidget {
                 </div>
             );
             properties.push(
-                <div key="padding" className='ozw-property-row'>
-                    <label className='ozw-property-label'>Padding</label>
+                <div key="padding" className='ozw-field ozw-property-row'>
+                    <label className='ozw-field-label ozw-property-label'>Padding</label>
                     <select
-                        className='theia-select ozw-property-input'
+                        className='ozw-select ozw-select--md ozw-property-input'
                         value={this.selectedComponentMetadata.padding as string || '8px'}
                         onChange={(e) => this.handlePropertyChange('padding', e.target.value)}
                     >
@@ -309,10 +380,10 @@ export class OzwPropertiesWidget extends BaseWidget {
                 </div>
             );
             properties.push(
-                <div key="alignment" className='ozw-property-row'>
-                    <label className='ozw-property-label'>Alignment</label>
+                <div key="alignment" className='ozw-field ozw-property-row'>
+                    <label className='ozw-field-label ozw-property-label'>Alignment</label>
                     <select
-                        className='theia-select ozw-property-input'
+                        className='ozw-select ozw-select--md ozw-property-input'
                         value={this.selectedComponentMetadata.alignment as string || 'start'}
                         onChange={(e) => this.handlePropertyChange('alignment', e.target.value)}
                     >
@@ -327,25 +398,25 @@ export class OzwPropertiesWidget extends BaseWidget {
 
         // Common styling properties
         properties.push(
-            <div key="width" className='ozw-property-row'>
-                <label className='ozw-property-label'>Width</label>
+            <div key="width" className='ozw-field ozw-property-row'>
+                <label className='ozw-field-label ozw-property-label'>Width</label>
                 <ControlledInput
                     value={this.selectedComponentMetadata.width as string || ''}
                     onChange={(value) => this.handlePropertyChange('width', value)}
                     placeholder="auto"
-                    className='theia-input ozw-property-input'
+                    className='ozw-input ozw-input--md ozw-property-input'
                 />
             </div>
         );
 
         properties.push(
-            <div key="height" className='ozw-property-row'>
-                <label className='ozw-property-label'>Height</label>
+            <div key="height" className='ozw-field ozw-property-row'>
+                <label className='ozw-field-label ozw-property-label'>Height</label>
                 <ControlledInput
                     value={this.selectedComponentMetadata.height as string || ''}
                     onChange={(value) => this.handlePropertyChange('height', value)}
                     placeholder="auto"
-                    className='theia-input ozw-property-input'
+                    className='ozw-input ozw-input--md ozw-property-input'
                 />
             </div>
         );
