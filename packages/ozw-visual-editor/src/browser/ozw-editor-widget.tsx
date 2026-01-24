@@ -311,13 +311,19 @@ export class OzwEditorWidget extends BaseWidget implements Saveable, SaveableSou
             }
         });
 
-        // Make widget focusable immediately before anything else
-        this.node.tabIndex = 0;
-        // Ensure focus can be received immediately
+        // Make widget focusable only when needed (not always, to avoid interfering with tab selection)
+        // Use tabIndex = -1 initially, and set to 0 only when widget is active
+        // CRITICAL: Keep tabIndex = -1 to prevent text cursor from appearing on tabs
+        this.node.tabIndex = -1;
+        // Ensure focus can be received when needed
         this.node.setAttribute('aria-label', 'OZW Visual Editor');
-
         // Add keyboard listener for delete and escape
+        // Only handle if the widget is actually focused
         this.node.addEventListener('keydown', (e) => {
+            // Only process if this widget is focused
+            if (document.activeElement !== this.node && !this.node.contains(document.activeElement)) {
+                return;
+            }
             if ((e.key === 'Delete' || e.key === 'Backspace') && this._selectedComponentId) {
                 e.preventDefault();
                 this.deleteComponent(this._selectedComponentId);
@@ -356,7 +362,10 @@ export class OzwEditorWidget extends BaseWidget implements Saveable, SaveableSou
 
     protected override onActivateRequest(msg: Message): void {
         super.onActivateRequest(msg);
-        // Simply focus the node - it's already focusable with tabIndex=0
+        // Make focusable when activated and focus it
+        // But keep cursor as default to prevent I-beam cursor
+        this.node.tabIndex = 0;
+        this.node.style.cursor = 'default';
         this.node.focus({ preventScroll: true });
     }
 
@@ -541,6 +550,12 @@ export class OzwEditorWidget extends BaseWidget implements Saveable, SaveableSou
         // Click handler to deselect when clicking on empty space and ensure focus
         workspace.addEventListener('click', (e) => {
             const target = e.target as HTMLElement;
+            
+            // Don't interfere with clicks outside the widget (like tab selection)
+            if (!this.node.contains(target)) {
+                return;
+            }
+            
             // Deselect if clicking directly on workspace, empty state, or header
             // But not if clicking on a component or its children
             if (target === workspace || 
@@ -553,16 +568,35 @@ export class OzwEditorWidget extends BaseWidget implements Saveable, SaveableSou
                     this.deselectComponent();
                 }
             }
-            // Ensure widget has focus for keyboard shortcuts (Ctrl+S, etc.)
-            if (!this.node.contains(document.activeElement)) {
-                this.node.focus();
+            // Only focus if clicking inside the widget and it's not already focused
+            // Use a small delay to avoid interfering with tab selection
+            if (this.node.contains(target) && !this.node.contains(document.activeElement)) {
+                setTimeout(() => {
+                    if (this.node.contains(document.activeElement) || document.activeElement === this.node) {
+                        return; // Already focused or something else got focus
+                    }
+                    this.node.tabIndex = 0;
+                    this.node.focus();
+                }, 10);
             }
         });
 
-        // Also ensure focus when clicking on canvas container
-        this.canvasContainer.addEventListener('click', () => {
-            if (!this.node.contains(document.activeElement)) {
-                this.node.focus();
+        // Also ensure focus when clicking on canvas container, but only if click is inside
+        this.canvasContainer.addEventListener('click', (e) => {
+            const target = e.target as HTMLElement;
+            // Don't interfere with clicks outside
+            if (!this.node.contains(target)) {
+                return;
+            }
+            // Only focus if not already focused and click is inside widget
+            if (this.node.contains(target) && !this.node.contains(document.activeElement)) {
+                setTimeout(() => {
+                    if (this.node.contains(document.activeElement) || document.activeElement === this.node) {
+                        return;
+                    }
+                    this.node.tabIndex = 0;
+                    this.node.focus();
+                }, 10);
             }
         });
 

@@ -21,6 +21,15 @@
     overflow: hidden;
 }
 
+/* Keep pointer cursor for interactive elements */
+.ozw-editor-widget .ozw-component {
+    cursor: move;
+}
+
+.ozw-editor-widget .ozw-delete-button {
+    cursor: pointer;
+}
+
 .ozw-mode-toolbar {
     display: flex;
     gap: 8px;

@@ -641,7 +641,10 @@ export class TabBarRenderer extends TabBar.Renderer {
             this.hoverService.requestHover({
                 content: tooltip,
                 target: event.currentTarget,
-                position
+                position,
+                // Do not let the hover steal the pointer from the tab itself.
+                // Otherwise, the tab can lose :hover and the close icon flickers/disappears.
+                cssClasses: ['tab-caption-hover']
             });
         }
     };

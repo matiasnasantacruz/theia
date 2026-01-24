@@ -105,3 +105,12 @@
   border-radius: 10px;
   width: var(--theia-hover-preview-width);
 }
+
+/**
+ * Tab caption hovers should behave like classic tooltips:
+ * - must not steal hover from the tab (otherwise close icon can flicker/disappear)
+ * - must not capture clicks/selections
+ */
+.theia-hover.tab-caption-hover {
+  pointer-events: none;
+}
