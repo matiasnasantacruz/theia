@@ -24,6 +24,17 @@ export interface ComponentMetadata {
     label?: string;
     width?: string;
     height?: string;
+    /**
+     * Peso proporcional para layouts (`row` / `column`).
+     * No representa tamaño absoluto; solo relación contra la suma de pesos hermanos.
+     * Default efectivo: 1.
+     */
+    weight?: number;
+    /**
+     * Tamaño del espaciador (Spacer) como longitud CSS.
+     * Ej: `8px`, `1rem`, `10%`.
+     */
+    space?: string;
     backgroundColor?: string;
     color?: string;
     padding?: string;

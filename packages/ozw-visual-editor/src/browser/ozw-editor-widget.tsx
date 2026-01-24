@@ -36,6 +36,16 @@ export interface ComponentMetadata {
     label?: string;
     width?: string;
     height?: string;
+    /**
+     * Peso proporcional para layouts (`row` / `column`).
+     * Default efectivo: 1.
+     */
+    weight?: number;
+    /**
+     * Tamaño del espaciador (Spacer) como longitud CSS.
+     * Ej: `8px`, `1rem`, `10%`.
+     */
+    space?: string;
     backgroundColor?: string;
     color?: string;
     padding?: string;
@@ -744,7 +754,7 @@ export class OzwEditorWidget extends BaseWidget implements Saveable, SaveableSou
         console.log('✅ renderCanvas: Render completed');
     }
 
-    protected createTreeNodeElement(node: TreeNode, depth: number = 0): HTMLDivElement {
+    protected createTreeNodeElement(node: TreeNode, depth: number = 0, parentType: string | undefined = undefined): HTMLDivElement {
         const element = document.createElement('div');
         element.className = `ozw-component ozw-component-${node.type}`;
         element.setAttribute('data-component-id', node.id);
@@ -754,6 +764,23 @@ export class OzwEditorWidget extends BaseWidget implements Saveable, SaveableSou
         const metadata = this._document.schema.metadata[node.id] || {};
         const isContainer = this.canHaveChildren(node.type);
         let childrenHost: HTMLDivElement | null = null;
+
+        // Weight (proporcional) for direct children of row/column.
+        if (parentType === 'row' || parentType === 'column') {
+            const raw = (metadata as ComponentMetadata).weight;
+            const parsed = typeof raw === 'number'
+                ? raw
+                : typeof raw === 'string'
+                    ? Number(raw)
+                    : undefined;
+            const weight = (typeof parsed === 'number' && Number.isFinite(parsed) && parsed > 0) ? parsed : 1;
+
+            element.style.flexGrow = String(weight);
+            element.style.flexShrink = '1';
+            element.style.flexBasis = '0px';
+            // Helps prevent overflow in flex containers.
+            element.style.minWidth = '0';
+        }
 
         // Setup drag handlers
         element.addEventListener('dragstart', (e) => this.handleComponentDragStart(e, node.id));
@@ -847,13 +874,13 @@ export class OzwEditorWidget extends BaseWidget implements Saveable, SaveableSou
             element.style.position = 'relative';
             element.style.padding = '8px 16px';
             element.style.cursor = 'move';
-            this.renderLeafComponent(element, node.type, metadata);
+            this.renderLeafComponent(element, node.type, metadata, parentType);
         }
 
         // Recursively render children for containers
         if (node.children && node.children.length > 0) {
             node.children.forEach(childNode => {
-                const childElement = this.createTreeNodeElement(childNode, depth + 1);
+                const childElement = this.createTreeNodeElement(childNode, depth + 1, node.type);
                 (childrenHost ?? element).appendChild(childElement);
             });
         } else if (isContainer) {
@@ -907,10 +934,40 @@ export class OzwEditorWidget extends BaseWidget implements Saveable, SaveableSou
         return element;
     }
 
-    protected renderLeafComponent(element: HTMLDivElement, type: string, metadata: ComponentMetadata): void {
+    protected renderLeafComponent(element: HTMLDivElement, type: string, metadata: ComponentMetadata, parentType: string | undefined = undefined): void {
         const baseHeight = '36px';
 
         switch (type) {
+            case 'spacer': {
+                const space = typeof metadata.space === 'string' && metadata.space.trim().length > 0 ? metadata.space.trim() : '16px';
+
+                element.style.padding = '0';
+                element.style.display = 'flex';
+                element.style.alignItems = 'center';
+                element.style.justifyContent = 'center';
+                element.style.border = '1px dashed rgba(127, 127, 127, 0.35)';
+                element.style.borderRadius = '6px';
+                element.style.backgroundColor = 'rgba(127, 127, 127, 0.10)';
+                element.style.color = 'rgba(200, 200, 200, 0.75)';
+                element.style.fontSize = '11px';
+                element.style.letterSpacing = '0.4px';
+                element.style.userSelect = 'none';
+
+                if (parentType === 'row') {
+                    element.style.width = space;
+                    element.style.height = baseHeight;
+                    element.innerHTML = `<span>Spacer (${space})</span>`;
+                } else if (parentType === 'column') {
+                    element.style.width = '100%';
+                    element.style.height = space;
+                    element.innerHTML = `<span>Spacer (${space})</span>`;
+                } else {
+                    element.style.width = baseHeight;
+                    element.style.height = baseHeight;
+                    element.innerHTML = `<span>Spacer</span>`;
+                }
+                break;
+            }
             case 'button':
                 // Custom button system (avoid `theia-button` for long-term visual consistency)
                 const rawVariant = typeof metadata.variant === 'string' ? metadata.variant : 'primary';
@@ -1705,9 +1762,11 @@ export class OzwEditorWidget extends BaseWidget implements Saveable, SaveableSou
             id,
             type,
             properties: {
-                label: type === 'column' ? 'Columna' :
-                    type === 'row' ? 'Fila' :
-                        `${type.charAt(0).toUpperCase()}${type.slice(1)}`
+                label: type === 'column' ? 'Columna'
+                    : type === 'row' ? 'Fila'
+                        : type === 'spacer' ? 'Spacer'
+                            : `${type.charAt(0).toUpperCase()}${type.slice(1)}`,
+                ...(type === 'spacer' ? { space: '16px' } : undefined)
             }
         };
 
@@ -2033,7 +2092,7 @@ export class OzwEditorWidget extends BaseWidget implements Saveable, SaveableSou
                     OzwPropertiesWidget.ID
                 );
                 if (propertiesWidget) {
-                    propertiesWidget.setSelectedComponent(null, null, {});
+                    propertiesWidget.setSelectedComponent(undefined, undefined, {});
                 }
             }
         } catch (error) {

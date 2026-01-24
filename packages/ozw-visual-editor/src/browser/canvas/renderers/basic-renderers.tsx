@@ -44,3 +44,12 @@ export function renderContainer(metadata: ComponentMetadata): React.ReactNode {
     );
 }
 
+export function renderSpacer(metadata: ComponentMetadata): React.ReactNode {
+    const space = typeof metadata.space === 'string' && metadata.space.trim().length > 0 ? metadata.space.trim() : '16px';
+    return (
+        <div style={{ opacity: 0.9 }}>
+            Spacer ({space})
+        </div>
+    );
+}
+

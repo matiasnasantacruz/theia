@@ -37,7 +37,7 @@ export class OzwSidePanelsService {
         await this.shell.activateWidget(toolboxWidget.id);
 
         const propertiesWidget = await this.getPropertiesWidget();
-        propertiesWidget.setSelectedComponent(null, null, {});
+        propertiesWidget.setSelectedComponent(undefined, undefined, {});
     }
 
     async showProperties(

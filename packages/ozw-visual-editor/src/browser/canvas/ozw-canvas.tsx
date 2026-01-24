@@ -48,7 +48,7 @@ export const OzwCanvas: React.FC<OzwCanvasProps> = props => {
         }
     };
 
-    const renderNode = (node: TreeNode, depth: number = 0): React.ReactNode => {
+    const renderNode = (node: TreeNode, depth: number = 0, parentType: string | undefined = undefined): React.ReactNode => {
         const metadata = document.schema.metadata[node.id] || {};
         const isContainer = canHaveChildren(node.type);
         const isSelected = props.selectedComponentId === node.id;
@@ -109,6 +109,47 @@ export const OzwCanvas: React.FC<OzwCanvasProps> = props => {
                 padding: '8px 16px',
                 cursor: 'move',
             } satisfies React.CSSProperties);
+        }
+
+        // Weight (proportional) for direct children of row/column.
+        if (parentType === 'row' || parentType === 'column') {
+            const raw = metadata.weight;
+            const parsed = typeof raw === 'number'
+                ? raw
+                : typeof raw === 'string'
+                    ? Number(raw)
+                    : undefined;
+            const weight = (typeof parsed === 'number' && Number.isFinite(parsed) && parsed > 0) ? parsed : 1;
+            Object.assign(wrapperStyle, {
+                flexGrow: weight,
+                flexShrink: 1,
+                flexBasis: '0px',
+                minWidth: 0,
+            } satisfies React.CSSProperties);
+        }
+
+        if (node.type === 'spacer') {
+            const space = typeof metadata.space === 'string' && metadata.space.trim().length > 0 ? metadata.space.trim() : '16px';
+            Object.assign(wrapperStyle, {
+                padding: 0,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                border: '1px dashed rgba(127, 127, 127, 0.35)',
+                borderRadius: '6px',
+                backgroundColor: 'rgba(127, 127, 127, 0.10)',
+                color: 'rgba(200, 200, 200, 0.75)',
+                fontSize: '11px',
+                letterSpacing: '0.4px',
+                userSelect: 'none',
+            } satisfies React.CSSProperties);
+            if (parentType === 'row') {
+                Object.assign(wrapperStyle, { width: space, height: '36px' } satisfies React.CSSProperties);
+            } else if (parentType === 'column') {
+                Object.assign(wrapperStyle, { width: '100%', height: space } satisfies React.CSSProperties);
+            } else {
+                Object.assign(wrapperStyle, { width: '36px', height: '36px' } satisfies React.CSSProperties);
+            }
         }
 
         const leafRenderer = props.registry.get(node.type);
@@ -180,7 +221,7 @@ export const OzwCanvas: React.FC<OzwCanvasProps> = props => {
         ].filter(Boolean).join(' ');
 
         const children = node.children && node.children.length > 0
-            ? node.children.map(child => renderNode(child, depth + 1))
+            ? node.children.map(child => renderNode(child, depth + 1, node.type))
             : undefined;
 
         const placeholder = isContainer && (!node.children || node.children.length === 0)

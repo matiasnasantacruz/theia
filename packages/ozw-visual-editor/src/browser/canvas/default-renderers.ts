@@ -18,7 +18,7 @@ import { ComponentRendererRegistry } from './component-renderer-registry';
 import { renderButton } from './renderers/button-renderer';
 import { renderInput } from './renderers/input-renderer';
 import { renderText } from './renderers/text-renderer';
-import { renderCard, renderContainer, renderImage } from './renderers/basic-renderers';
+import { renderCard, renderContainer, renderImage, renderSpacer } from './renderers/basic-renderers';
 
 export function createDefaultRendererRegistry(): ComponentRendererRegistry {
     const registry = new ComponentRendererRegistry();
@@ -28,6 +28,7 @@ export function createDefaultRendererRegistry(): ComponentRendererRegistry {
     registry.register('image', renderImage);
     registry.register('card', renderCard);
     registry.register('container', renderContainer);
+    registry.register('spacer', renderSpacer);
     return registry;
 }
 

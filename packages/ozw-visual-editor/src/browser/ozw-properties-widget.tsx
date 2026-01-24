@@ -32,7 +32,7 @@ interface ControlledInputProps {
 }
 
 const ControlledInput: React.FC<ControlledInputProps> = ({ value, onChange, placeholder, className, type = 'text' }) => {
-    const inputRef = React.useRef<HTMLInputElement>(null);
+    const inputRef = React.useRef<HTMLInputElement | undefined>(undefined);
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const newValue = e.target.value;
@@ -51,7 +51,9 @@ const ControlledInput: React.FC<ControlledInputProps> = ({ value, onChange, plac
 
     return (
         <input
-            ref={inputRef}
+            ref={node => {
+                inputRef.current = node ?? undefined;
+            }}
             type={type}
             className={className}
             value={value}
@@ -74,8 +76,8 @@ export class OzwPropertiesWidget extends BaseWidget {
     static readonly LABEL = 'Properties';
 
     private root: Root | undefined;
-    private selectedComponentId: string | null = null;
-    private selectedComponentType: string | null = null;
+    private selectedComponentId: string | undefined = undefined;
+    private selectedComponentType: string | undefined = undefined;
     private selectedComponentMetadata: ComponentMetadata = {};
     private onPropertyChangeCallback: ((event: PropertyChangeEvent) => void) | undefined;
 
@@ -113,7 +115,7 @@ export class OzwPropertiesWidget extends BaseWidget {
         super.dispose();
     }
 
-    setSelectedComponent(id: string | null, type: string | null, metadata: ComponentMetadata): void {
+    setSelectedComponent(id: string | undefined, type: string | undefined, metadata: ComponentMetadata): void {
         this.selectedComponentId = id;
         this.selectedComponentType = type;
         this.selectedComponentMetadata = { ...metadata };
@@ -166,7 +168,7 @@ export class OzwPropertiesWidget extends BaseWidget {
                 <label className='ozw-field-label ozw-property-label'>Label</label>
                 <ControlledInput
                     value={this.selectedComponentMetadata.label as string || ''}
-                    onChange={(value) => this.handlePropertyChange('label', value)}
+                    onChange={value => this.handlePropertyChange('label', value)}
                     placeholder="Component label"
                     className='ozw-input ozw-input--md ozw-property-input'
                 />
@@ -174,6 +176,20 @@ export class OzwPropertiesWidget extends BaseWidget {
         );
 
         // Type-specific properties
+        if (this.selectedComponentType === 'spacer') {
+            properties.push(
+                <div key="space" className='ozw-field ozw-property-row'>
+                    <label className='ozw-field-label ozw-property-label'>Espacio</label>
+                    <ControlledInput
+                        value={this.selectedComponentMetadata.space as string || '16px'}
+                        onChange={value => this.handlePropertyChange('space', value)}
+                        placeholder="16px"
+                        className='ozw-input ozw-input--md ozw-property-input'
+                    />
+                </div>
+            );
+        }
+
         if (this.selectedComponentType === 'button') {
             properties.push(
                 <div key="variant" className='ozw-field ozw-property-row'>
@@ -181,7 +197,7 @@ export class OzwPropertiesWidget extends BaseWidget {
                     <select
                         className='ozw-select ozw-select--md ozw-property-input'
                         value={this.selectedComponentMetadata.variant as string || 'primary'}
-                        onChange={(e) => this.handlePropertyChange('variant', e.target.value)}
+                        onChange={e => this.handlePropertyChange('variant', e.target.value)}
                     >
                         <option value="primary">Primary</option>
                         <option value="secondary">Secondary</option>
@@ -196,7 +212,7 @@ export class OzwPropertiesWidget extends BaseWidget {
                     <select
                         className='ozw-select ozw-select--md ozw-property-input'
                         value={this.selectedComponentMetadata.size as string || 'medium'}
-                        onChange={(e) => this.handlePropertyChange('size', e.target.value)}
+                        onChange={e => this.handlePropertyChange('size', e.target.value)}
                     >
                         <option value="small">Small</option>
                         <option value="medium">Medium</option>
@@ -212,7 +228,7 @@ export class OzwPropertiesWidget extends BaseWidget {
                     <label className='ozw-field-label ozw-property-label'>Placeholder</label>
                     <ControlledInput
                         value={this.selectedComponentMetadata.placeholder as string || ''}
-                        onChange={(value) => this.handlePropertyChange('placeholder', value)}
+                    onChange={value => this.handlePropertyChange('placeholder', value)}
                         placeholder="Enter placeholder text"
                         className='ozw-input ozw-input--md ozw-property-input'
                     />
@@ -224,7 +240,7 @@ export class OzwPropertiesWidget extends BaseWidget {
                     <select
                         className='ozw-select ozw-select--md ozw-property-input'
                         value={this.selectedComponentMetadata.inputType as string || 'text'}
-                        onChange={(e) => this.handlePropertyChange('inputType', e.target.value)}
+                        onChange={e => this.handlePropertyChange('inputType', e.target.value)}
                     >
                         <option value="text">Text</option>
                         <option value="email">Email</option>
@@ -242,7 +258,7 @@ export class OzwPropertiesWidget extends BaseWidget {
                     <select
                         className='ozw-select ozw-select--md ozw-property-input'
                         value={this.selectedComponentMetadata.fontSize as string || '13px'}
-                        onChange={(e) => this.handlePropertyChange('fontSize', e.target.value)}
+                        onChange={e => this.handlePropertyChange('fontSize', e.target.value)}
                     >
                         <option value="11px">Small (11px)</option>
                         <option value="13px">Medium (13px)</option>
@@ -257,7 +273,7 @@ export class OzwPropertiesWidget extends BaseWidget {
                     <select
                         className='ozw-select ozw-select--md ozw-property-input'
                         value={this.selectedComponentMetadata.fontWeight as string || 'normal'}
-                        onChange={(e) => this.handlePropertyChange('fontWeight', e.target.value)}
+                        onChange={e => this.handlePropertyChange('fontWeight', e.target.value)}
                     >
                         <option value="normal">Normal</option>
                         <option value="bold">Bold</option>
@@ -293,7 +309,7 @@ export class OzwPropertiesWidget extends BaseWidget {
                     <select
                         className='ozw-select ozw-select--md ozw-property-input'
                         value={textColorMode}
-                        onChange={(e) => {
+                        onChange={e => {
                             const value = e.target.value as TextColorMode;
                             this.handlePropertyChange('textColorMode', value);
                             if (value === 'custom') {
@@ -321,7 +337,7 @@ export class OzwPropertiesWidget extends BaseWidget {
                             type="color"
                             className='ozw-color ozw-property-input'
                             value={textColorLight}
-                            onChange={(e) => {
+                            onChange={e => {
                                 this.handlePropertyChange('textColorMode', 'custom');
                                 this.handlePropertyChange('textColorLight', e.target.value);
                             }}
@@ -335,7 +351,7 @@ export class OzwPropertiesWidget extends BaseWidget {
                             type="color"
                             className='ozw-color ozw-property-input'
                             value={textColorDark}
-                            onChange={(e) => {
+                            onChange={e => {
                                 this.handlePropertyChange('textColorMode', 'custom');
                                 this.handlePropertyChange('textColorDark', e.target.value);
                             }}
@@ -353,7 +369,7 @@ export class OzwPropertiesWidget extends BaseWidget {
                     <select
                         className='ozw-select ozw-select--md ozw-property-input'
                         value={this.selectedComponentMetadata.gap as string || '8px'}
-                        onChange={(e) => this.handlePropertyChange('gap', e.target.value)}
+                        onChange={e => this.handlePropertyChange('gap', e.target.value)}
                     >
                         <option value="0">None</option>
                         <option value="4px">Small (4px)</option>
@@ -369,7 +385,7 @@ export class OzwPropertiesWidget extends BaseWidget {
                     <select
                         className='ozw-select ozw-select--md ozw-property-input'
                         value={this.selectedComponentMetadata.padding as string || '8px'}
-                        onChange={(e) => this.handlePropertyChange('padding', e.target.value)}
+                        onChange={e => this.handlePropertyChange('padding', e.target.value)}
                     >
                         <option value="0">None</option>
                         <option value="4px">Small (4px)</option>
@@ -385,7 +401,7 @@ export class OzwPropertiesWidget extends BaseWidget {
                     <select
                         className='ozw-select ozw-select--md ozw-property-input'
                         value={this.selectedComponentMetadata.alignment as string || 'start'}
-                        onChange={(e) => this.handlePropertyChange('alignment', e.target.value)}
+                        onChange={e => this.handlePropertyChange('alignment', e.target.value)}
                     >
                         <option value="start">Start</option>
                         <option value="center">Center</option>
@@ -402,7 +418,7 @@ export class OzwPropertiesWidget extends BaseWidget {
                 <label className='ozw-field-label ozw-property-label'>Width</label>
                 <ControlledInput
                     value={this.selectedComponentMetadata.width as string || ''}
-                    onChange={(value) => this.handlePropertyChange('width', value)}
+                    onChange={value => this.handlePropertyChange('width', value)}
                     placeholder="auto"
                     className='ozw-input ozw-input--md ozw-property-input'
                 />
@@ -414,8 +430,37 @@ export class OzwPropertiesWidget extends BaseWidget {
                 <label className='ozw-field-label ozw-property-label'>Height</label>
                 <ControlledInput
                     value={this.selectedComponentMetadata.height as string || ''}
-                    onChange={(value) => this.handlePropertyChange('height', value)}
+                    onChange={value => this.handlePropertyChange('height', value)}
                     placeholder="auto"
+                    className='ozw-input ozw-input--md ozw-property-input'
+                />
+            </div>
+        );
+
+        // Weight (proportional) - applies when the selected component is a direct child of row/column.
+        const rawWeight = this.selectedComponentMetadata.weight as unknown;
+        const weightValue = typeof rawWeight === 'number'
+            ? rawWeight
+            : typeof rawWeight === 'string'
+                ? Number(rawWeight)
+                : undefined;
+
+        properties.push(
+            <div key="weight" className='ozw-field ozw-property-row'>
+                <label className='ozw-field-label ozw-property-label'>Peso</label>
+                <ControlledInput
+                    type='number'
+                    value={String((typeof weightValue === 'number' && Number.isFinite(weightValue) && weightValue > 0) ? weightValue : 1)}
+                    onChange={value => {
+                        const trimmed = value.trim();
+                        if (!trimmed) {
+                            this.handlePropertyChange('weight', undefined);
+                            return;
+                        }
+                        const parsed = Number(trimmed);
+                        this.handlePropertyChange('weight', (Number.isFinite(parsed) && parsed > 0) ? parsed : 1);
+                    }}
+                    placeholder="1"
                     className='ozw-input ozw-input--md ozw-property-input'
                 />
             </div>
