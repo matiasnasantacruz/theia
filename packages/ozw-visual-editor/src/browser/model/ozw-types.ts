@@ -25,6 +25,20 @@ export interface ComponentMetadata {
     width?: string;
     height?: string;
     /**
+     * Alineación horizontal del contenido dentro del "slot" del widget.
+     * Útil cuando el widget recibe espacio extra por el sistema de pesos.
+     */
+    alignH?: 'start' | 'center' | 'end';
+    /**
+     * Alineación vertical del contenido dentro del "slot" del widget.
+     */
+    alignV?: 'start' | 'center' | 'end';
+    /**
+     * Si está en `true`, el componente NO participa del sistema de pesos (flex-grow) en `row`/`column`.
+     * Útil para que un widget conserve su tamaño intrínseco dentro de un layout.
+     */
+    disableWeight?: boolean;
+    /**
      * Peso proporcional para layouts (`row` / `column`).
      * No representa tamaño absoluto; solo relación contra la suma de pesos hermanos.
      * Default efectivo: 1.

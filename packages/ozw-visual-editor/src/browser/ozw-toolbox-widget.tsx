@@ -18,6 +18,7 @@ import { injectable, postConstruct } from '@theia/core/shared/inversify';
 import { BaseWidget, Message } from '@theia/core/lib/browser';
 import * as React from '@theia/core/shared/react';
 import { createRoot, Root } from '@theia/core/shared/react-dom/client';
+import { getToolboxComponents } from './component-registry';
 
 export interface ToolboxComponent {
     type: string;
@@ -26,17 +27,7 @@ export interface ToolboxComponent {
     description: string;
 }
 
-const TOOLBOX_COMPONENTS: ToolboxComponent[] = [
-    { type: 'column', label: 'Column', icon: 'fa fa-bars', description: 'Vertical layout container - stacks children vertically' },
-    { type: 'row', label: 'Row', icon: 'fa fa-grip-lines', description: 'Horizontal layout container - arranges children horizontally' },
-    { type: 'spacer', label: 'Spacer', icon: 'fa fa-arrows-alt-h', description: 'Espaciador: crea espacio horizontal/vertical dentro de layouts' },
-    { type: 'button', label: 'Button', icon: 'fa fa-hand-pointer', description: 'Clickable button element' },
-    { type: 'input', label: 'Input', icon: 'fa fa-keyboard', description: 'Text input field' },
-    { type: 'card', label: 'Card', icon: 'fa fa-id-card', description: 'Container card component' },
-    { type: 'container', label: 'Container', icon: 'fa fa-square', description: 'Generic container' },
-    { type: 'text', label: 'Text', icon: 'fa fa-font', description: 'Text label element' },
-    { type: 'image', label: 'Image', icon: 'fa fa-image', description: 'Image placeholder' },
-];
+const TOOLBOX_COMPONENTS: ToolboxComponent[] = getToolboxComponents();
 
 @injectable()
 export class OzwToolboxWidget extends BaseWidget {

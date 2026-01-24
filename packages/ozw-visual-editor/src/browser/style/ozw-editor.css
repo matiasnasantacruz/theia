@@ -217,6 +217,12 @@
     min-width: 0;
 }
 
+/* Leaf inner wrapper used for per-widget alignment (alignH/alignV) */
+.ozw-leaf-inner {
+    width: 100%;
+    min-width: 0;
+}
+
 /* Discreet layout “identifiers” */
 .ozw-component-column > .ozw-layout-header {
     color: rgba(0, 122, 204, 0.85);
@@ -228,13 +234,15 @@
 
 /* Row header as a subtle “renglón” above items */
 .ozw-component-row > .ozw-layout-header.ozw-layout-header--row {
-    width: 100%;
+    /* Match column: just a label (no box) */
+    align-self: flex-start;
+    display: inline-flex;
+    width: auto;
     box-sizing: border-box;
-    padding: 3px 8px;
-    border-radius: 6px;
-    background: rgba(16, 163, 127, 0.07);
-    border: 1px solid rgba(16, 163, 127, 0.18);
-    opacity: 0.8;
+    padding: 0;
+    border-radius: 0;
+    background: none;
+    border: none;
 }
 
 .ozw-container-placeholder {
@@ -396,13 +404,21 @@
     overflow: hidden;
 }
 
-/* Prevent double scrollbars - let Monaco handle its own scrolling */
+/* SplitPanel children are flex items: allow them to shrink for scrolling */
 #ozw-split-panel .lm-Widget {
-    overflow: hidden !important;
+    min-width: 0 !important;
+    min-height: 0 !important;
 }
 
 /* Ensure text editor container in split view doesn't create its own scrollbar */
 #ozw-split-panel .ozw-text-editor-container {
     overflow: hidden !important;
     display: block !important;
+}
+
+/* Canvas must be scrollable in split view / small sizes */
+#ozw-split-panel .ozw-canvas-container {
+    height: 100% !important;
+    min-height: 0 !important;
+    overflow: auto !important;
 }

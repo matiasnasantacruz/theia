@@ -25,6 +25,7 @@ import { SplitPanel } from '@lumino/widgets';
 import { OzwPropertiesWidget } from './ozw-properties-widget';
 import { OzwToolboxWidget } from './ozw-toolbox-widget';
 import { FileService } from '@theia/filesystem/lib/browser/file-service';
+import { applyFlexChildSizing, createDefaultMetadata, renderLeafDom } from './component-registry';
 
 export interface TreeNode {
     id: string;
@@ -36,6 +37,18 @@ export interface ComponentMetadata {
     label?: string;
     width?: string;
     height?: string;
+    /**
+     * Alineación horizontal del contenido dentro del widget.
+     */
+    alignH?: 'start' | 'center' | 'end';
+    /**
+     * Alineación vertical del contenido dentro del widget.
+     */
+    alignV?: 'start' | 'center' | 'end';
+    /**
+     * Si está en `true`, NO participa del sistema de pesos (flex-grow) en `row`/`column`.
+     */
+    disableWeight?: boolean;
     /**
      * Peso proporcional para layouts (`row` / `column`).
      * Default efectivo: 1.
@@ -765,22 +778,12 @@ export class OzwEditorWidget extends BaseWidget implements Saveable, SaveableSou
         const isContainer = this.canHaveChildren(node.type);
         let childrenHost: HTMLDivElement | null = null;
 
-        // Weight (proporcional) for direct children of row/column.
-        if (parentType === 'row' || parentType === 'column') {
-            const raw = (metadata as ComponentMetadata).weight;
-            const parsed = typeof raw === 'number'
-                ? raw
-                : typeof raw === 'string'
-                    ? Number(raw)
-                    : undefined;
-            const weight = (typeof parsed === 'number' && Number.isFinite(parsed) && parsed > 0) ? parsed : 1;
-
-            element.style.flexGrow = String(weight);
-            element.style.flexShrink = '1';
-            element.style.flexBasis = '0px';
-            // Helps prevent overflow in flex containers.
-            element.style.minWidth = '0';
-        }
+        applyFlexChildSizing(
+            element,
+            node.type,
+            metadata as ComponentMetadata,
+            parentType === 'row' || parentType === 'column' ? parentType : undefined
+        );
 
         // Setup drag handlers
         element.addEventListener('dragstart', (e) => this.handleComponentDragStart(e, node.id));
@@ -874,8 +877,19 @@ export class OzwEditorWidget extends BaseWidget implements Saveable, SaveableSou
             element.style.position = 'relative';
             element.style.padding = '8px 16px';
             element.style.cursor = 'move';
-            this.renderLeafComponent(element, node.type, metadata, parentType);
+            renderLeafDom(
+                element,
+                node.type,
+                metadata as ComponentMetadata,
+                parentType === 'row' || parentType === 'column' ? parentType : undefined
+            );
+
+            // Optional alignment controls for leaf widgets (align content inside its slot).
+            this.applyLeafAlignment(element, metadata as ComponentMetadata);
         }
+
+        // Optional explicit sizing (applies to containers + leaves).
+        this.applyExplicitSizing(element, metadata as ComponentMetadata);
 
         // Recursively render children for containers
         if (node.children && node.children.length > 0) {
@@ -934,176 +948,35 @@ export class OzwEditorWidget extends BaseWidget implements Saveable, SaveableSou
         return element;
     }
 
-    protected renderLeafComponent(element: HTMLDivElement, type: string, metadata: ComponentMetadata, parentType: string | undefined = undefined): void {
-        const baseHeight = '36px';
+    protected applyExplicitSizing(element: HTMLDivElement, metadata: ComponentMetadata): void {
+        if (typeof metadata.width === 'string' && metadata.width.trim().length > 0) {
+            element.style.width = metadata.width.trim();
+        }
+        if (typeof metadata.height === 'string' && metadata.height.trim().length > 0) {
+            element.style.height = metadata.height.trim();
+        }
+    }
 
-        switch (type) {
-            case 'spacer': {
-                const space = typeof metadata.space === 'string' && metadata.space.trim().length > 0 ? metadata.space.trim() : '16px';
+    protected applyLeafAlignment(element: HTMLDivElement, metadata: ComponentMetadata): void {
+        const hasAlignH = metadata.alignH === 'start' || metadata.alignH === 'center' || metadata.alignH === 'end';
+        const hasAlignV = metadata.alignV === 'start' || metadata.alignV === 'center' || metadata.alignV === 'end';
+        if (!hasAlignH && !hasAlignV) {
+            return;
+        }
 
-                element.style.padding = '0';
-                element.style.display = 'flex';
-                element.style.alignItems = 'center';
-                element.style.justifyContent = 'center';
-                element.style.border = '1px dashed rgba(127, 127, 127, 0.35)';
-                element.style.borderRadius = '6px';
-                element.style.backgroundColor = 'rgba(127, 127, 127, 0.10)';
-                element.style.color = 'rgba(200, 200, 200, 0.75)';
-                element.style.fontSize = '11px';
-                element.style.letterSpacing = '0.4px';
-                element.style.userSelect = 'none';
+        const inner = document.createElement('div');
+        inner.className = 'ozw-leaf-inner';
+        while (element.firstChild) {
+            inner.appendChild(element.firstChild);
+        }
+        element.appendChild(inner);
 
-                if (parentType === 'row') {
-                    element.style.width = space;
-                    element.style.height = baseHeight;
-                    element.innerHTML = `<span>Spacer (${space})</span>`;
-                } else if (parentType === 'column') {
-                    element.style.width = '100%';
-                    element.style.height = space;
-                    element.innerHTML = `<span>Spacer (${space})</span>`;
-                } else {
-                    element.style.width = baseHeight;
-                    element.style.height = baseHeight;
-                    element.innerHTML = `<span>Spacer</span>`;
-                }
-                break;
-            }
-            case 'button':
-                // Custom button system (avoid `theia-button` for long-term visual consistency)
-                const rawVariant = typeof metadata.variant === 'string' ? metadata.variant : 'primary';
-                const variant = ((): string => {
-                    switch (rawVariant) {
-                        case 'primary':
-                        case 'secondary':
-                        case 'success':
-                        case 'danger':
-                        case 'ghost':
-                            return rawVariant;
-                        default:
-                            return 'primary';
-                    }
-                })();
-
-                const rawSize = typeof metadata.size === 'string' ? metadata.size : 'medium';
-                const size = ((): string => {
-                    switch (rawSize) {
-                        case 'small':
-                            return 'sm';
-                        case 'medium':
-                            return 'md';
-                        case 'large':
-                            return 'lg';
-                        default:
-                            return 'md';
-                    }
-                })();
-
-                element.innerHTML = `<button class="ozw-btn ozw-btn--${variant} ozw-btn--${size}">${metadata.label || 'Button'}</button>`;
-                element.style.backgroundColor = 'transparent';
-                element.style.padding = '0';
-                element.style.height = baseHeight;
-                element.style.display = 'flex';
-                element.style.alignItems = 'center';
-                break;
-            case 'input':
-                // Inputs in canvas always show their label (not just placeholder)
-                const rawInputType = typeof metadata.inputType === 'string' ? metadata.inputType : 'text';
-                const inputType = ((): string => {
-                    switch (rawInputType) {
-                        case 'text':
-                        case 'email':
-                        case 'password':
-                        case 'number':
-                            return rawInputType;
-                        default:
-                            return 'text';
-                    }
-                })();
-
-                const label = (metadata.label as string) || 'Input';
-                const placeholder = (metadata.placeholder as string) || '';
-
-                element.innerHTML = `
-                    <div class="ozw-field ozw-field--canvas">
-                        <div class="ozw-field-label">${label}</div>
-                        <input type="${inputType}" class="ozw-input ozw-input--md" placeholder="${placeholder}" />
-                    </div>
-                `;
-                element.style.backgroundColor = 'transparent';
-                element.style.padding = '0';
-                element.style.height = 'auto';
-                element.style.display = 'block';
-                break;
-            case 'text':
-                element.innerHTML = `<p class="ozw-modern-text">${metadata.label || 'Text'}</p>`;
-                element.style.backgroundColor = 'transparent';
-                element.style.padding = '0 8px';
-                element.style.height = baseHeight;
-                element.style.display = 'flex';
-                element.style.alignItems = 'center';
-                // Aplicar fontSize, fontWeight y colores (system/custom light/dark)
-                const textElement = element.querySelector('p.ozw-modern-text') as HTMLElement;
-                if (textElement) {
-                    if (metadata.fontSize) {
-                        textElement.style.fontSize = metadata.fontSize as string;
-                    }
-                    if (metadata.fontWeight) {
-                        textElement.style.fontWeight = metadata.fontWeight as string;
-                    }
-
-                    const mode = (metadata.textColorMode === 'system' || metadata.textColorMode === 'custom')
-                        ? metadata.textColorMode
-                        : undefined;
-
-                    const legacyTextColor = typeof metadata.textColor === 'string' ? metadata.textColor : undefined;
-                    const light = typeof metadata.textColorLight === 'string' ? metadata.textColorLight : legacyTextColor;
-                    const dark = typeof metadata.textColorDark === 'string' ? metadata.textColorDark : legacyTextColor;
-
-                    const isCustom = mode === 'custom' || (!mode && (typeof light === 'string' || typeof dark === 'string'));
-
-                    // Ensure theme-aware behavior (no inline color); rely on CSS to pick light/dark var.
-                    textElement.style.removeProperty('color');
-
-                    if (isCustom) {
-                        if (typeof light === 'string' && light.length > 0) {
-                            textElement.style.setProperty('--ozw-text-color-light', light);
-                        }
-                        if (typeof dark === 'string' && dark.length > 0) {
-                            textElement.style.setProperty('--ozw-text-color-dark', dark);
-                        }
-                    } else {
-                        textElement.style.removeProperty('--ozw-text-color-light');
-                        textElement.style.removeProperty('--ozw-text-color-dark');
-                    }
-                }
-                break;
-            case 'image':
-                element.innerHTML = `<div class="ozw-modern-image">
-                    <i class="fa fa-image" style="font-size: 20px; color: #999;"></i>
-                </div>`;
-                element.style.padding = '0';
-                element.style.height = baseHeight;
-                element.style.display = 'flex';
-                element.style.alignItems = 'center';
-                break;
-            case 'card':
-                element.innerHTML = `<div class="ozw-modern-card">
-                    <h4>${metadata.label || 'Card Title'}</h4>
-                    <p>Card content</p>
-                </div>`;
-                element.style.padding = '0';
-                break;
-            case 'container':
-                element.innerHTML = `<div class="ozw-modern-container">
-                    <p>${metadata.label || 'Container'}</p>
-                </div>`;
-                element.style.padding = '0';
-                break;
-            default:
-                element.textContent = metadata.label || type;
-                element.style.height = baseHeight;
-                element.style.display = 'flex';
-                element.style.alignItems = 'center';
+        element.style.display = 'flex';
+        if (hasAlignH) {
+            element.style.justifyContent = metadata.alignH === 'center' ? 'center' : metadata.alignH === 'end' ? 'flex-end' : 'flex-start';
+        }
+        if (hasAlignV) {
+            element.style.alignItems = metadata.alignV === 'center' ? 'center' : metadata.alignV === 'end' ? 'flex-end' : 'flex-start';
         }
     }
 
@@ -1692,13 +1565,6 @@ export class OzwEditorWidget extends BaseWidget implements Saveable, SaveableSou
         const targetId = targetElement.getAttribute('data-component-id');
         const targetType = targetElement.getAttribute('data-component-type');
 
-        console.log('Drop target:', {
-            element: targetElement,
-            id: targetId,
-            type: targetType,
-            classList: Array.from(targetElement.classList)
-        });
-
         // Validate drop target
         if (targetElement.classList.contains('ozw-canvas-workspace')) {
             // Dropping on root canvas
@@ -1711,26 +1577,30 @@ export class OzwEditorWidget extends BaseWidget implements Saveable, SaveableSou
             }
 
             // Add to root
-            console.log('Adding to root');
             this.addComponent(type, null);
         } else if (targetId && targetType) {
-            // Check if target is a layout container
+            const dropPos = this._dropPosition ?? 'after';
+
+            // Layout container (Column/Row):
+            // - if user is hovering the edge -> insert BEFORE/AFTER this container in its parent
+            // - otherwise -> insert INSIDE the container
             if (this.canHaveChildren(targetType)) {
-                // Target IS a layout (Column/Row) - drop INSIDE it
-                console.log('Adding INSIDE layout', targetType, targetId);
-                this.addComponent(type, targetId);
-            } else {
-                // Target is NOT a layout - drop in its PARENT container
-                const parentId = this.findParentId(targetId);
-                console.log('Target is not a layout, adding to parent:', parentId);
-                if (parentId) {
-                    this.addComponent(type, parentId);
-                } else {
-                    // No parent found, add to root
-                    console.log('No parent found, adding to root');
-                    this.addComponent(type, null);
+                if (dropPos === 'before' || dropPos === 'after') {
+                    this.insertNewComponentRelativeToSmart(type, targetId, dropPos);
+                    return;
                 }
+                this.addComponent(type, targetId);
+                return;
             }
+
+            // Leaf target: insert before/after the leaf itself (as sibling in its parent container).
+            if (dropPos === 'before' || dropPos === 'after') {
+                this.insertNewComponentRelativeToSmart(type, targetId, dropPos);
+                return;
+            }
+
+            // Fallback (shouldn't happen): treat as 'after'
+            this.insertNewComponentRelativeToSmart(type, targetId, 'after');
         }
     }
 
@@ -1761,13 +1631,7 @@ export class OzwEditorWidget extends BaseWidget implements Saveable, SaveableSou
         const component: OzwComponent = {
             id,
             type,
-            properties: {
-                label: type === 'column' ? 'Columna'
-                    : type === 'row' ? 'Fila'
-                        : type === 'spacer' ? 'Spacer'
-                            : `${type.charAt(0).toUpperCase()}${type.slice(1)}`,
-                ...(type === 'spacer' ? { space: '16px' } : undefined)
-            }
+            properties: createDefaultMetadata(type)
         };
 
         // Add to components array
@@ -1983,6 +1847,39 @@ export class OzwEditorWidget extends BaseWidget implements Saveable, SaveableSou
         }
 
         console.log('Inserted component', position, 'target. SourceIdx:', sourceIndex, 'AdjustedTargetIdx:', targetIndex);
+    }
+
+    protected insertNewComponentRelativeToSmart(type: string, targetId: string, position: 'before' | 'after'): void {
+        const targetInfo = this.findNodeWithParent(targetId, this._document.schema.tree);
+        if (!targetInfo) {
+            console.error('Could not find target for insertion');
+            return;
+        }
+
+        const id = `${type}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+        const component: OzwComponent = {
+            id,
+            type,
+            properties: createDefaultMetadata(type)
+        };
+
+        // Add to components + metadata first (tree references this id)
+        this._document.components.push(component);
+        this._document.schema.metadata[id] = component.properties;
+
+        const newNode: TreeNode = { id, type, children: this.canHaveChildren(type) ? [] : undefined };
+
+        const targetArray = targetInfo.parentArray;
+        const targetIndex = targetInfo.index;
+        if (position === 'before') {
+            targetArray.splice(targetIndex, 0, newNode);
+        } else {
+            targetArray.splice(targetIndex + 1, 0, newNode);
+        }
+
+        this.dirty = true;
+        this.syncToTextIfNeeded();
+        this.renderCanvas();
     }
 
     protected getDropEdgeThreshold(rect: DOMRect, isHorizontal: boolean): number {

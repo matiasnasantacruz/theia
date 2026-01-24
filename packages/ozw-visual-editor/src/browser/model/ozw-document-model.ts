@@ -15,6 +15,7 @@
 // *****************************************************************************
 
 import { ComponentMetadata, OzwComponent, OzwDocument, TreeNode } from './ozw-types';
+import { createDefaultMetadata } from '../component-registry';
 
 export type TreeInsertPosition = 'before' | 'after' | 'inside';
 
@@ -126,11 +127,7 @@ export function addComponent(
     const component: OzwComponent = {
         id,
         type,
-        properties: {
-            label: type === 'column' ? 'Columna'
-                : type === 'row' ? 'Fila'
-                    : `${type.charAt(0).toUpperCase()}${type.slice(1)}`
-        }
+        properties: createDefaultMetadata(type)
     };
 
     doc.components.push(component);

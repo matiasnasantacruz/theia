@@ -18,9 +18,8 @@ import { injectable, postConstruct } from '@theia/core/shared/inversify';
 import { BaseWidget, Message, codicon } from '@theia/core/lib/browser';
 import * as React from '@theia/core/shared/react';
 import { createRoot, Root } from '@theia/core/shared/react-dom/client';
-import { ComponentMetadata } from './ozw-editor-widget';
-
-type TextColorMode = 'system' | 'custom';
+import { createDefaultMetadata, getComponentDisplayName, getPropertyFieldsForType, renderCustomTextColorFields } from './component-registry';
+import { ComponentMetadata } from './model/ozw-types';
 
 // Componente de input que preserva la posición del cursor
 interface ControlledInputProps {
@@ -154,319 +153,249 @@ export class OzwPropertiesWidget extends BaseWidget {
     }
 
     protected getComponentDisplayName(): string {
-        const type = this.selectedComponentType || 'Component';
-        return this.selectedComponentMetadata.label as string ||
-            (type.charAt(0).toUpperCase() + type.slice(1));
+        const type = this.selectedComponentType || 'component';
+        return getComponentDisplayName(type, this.selectedComponentMetadata);
     }
 
     protected renderProperties(): React.ReactNode {
-        const properties: React.ReactNode[] = [];
+        const type = this.selectedComponentType || 'component';
+        const defaults = createDefaultMetadata(type);
+        const fields = getPropertyFieldsForType(type);
 
-        // Label property (all components have this)
-        properties.push(
-            <div key="label" className='ozw-field ozw-property-row'>
-                <label className='ozw-field-label ozw-property-label'>Label</label>
-                <ControlledInput
-                    value={this.selectedComponentMetadata.label as string || ''}
-                    onChange={value => this.handlePropertyChange('label', value)}
-                    placeholder="Component label"
-                    className='ozw-input ozw-input--md ozw-property-input'
-                />
-            </div>
-        );
+        const renderLayoutControls = (): React.ReactNode => {
+            // These controls are mainly intended for leaf widgets (non containers).
+            const isContainer = type === 'row' || type === 'column';
+            if (isContainer) {
+                return undefined;
+            }
 
-        // Type-specific properties
-        if (this.selectedComponentType === 'spacer') {
-            properties.push(
-                <div key="space" className='ozw-field ozw-property-row'>
-                    <label className='ozw-field-label ozw-property-label'>Espacio</label>
-                    <ControlledInput
-                        value={this.selectedComponentMetadata.space as string || '16px'}
-                        onChange={value => this.handlePropertyChange('space', value)}
-                        placeholder="16px"
-                        className='ozw-input ozw-input--md ozw-property-input'
-                    />
-                </div>
-            );
-        }
+            const meta = this.selectedComponentMetadata as Record<string, unknown>;
+            const width = (typeof meta.width === 'string' ? meta.width.trim() : '');
+            const height = (typeof meta.height === 'string' ? meta.height.trim() : '');
 
-        if (this.selectedComponentType === 'button') {
-            properties.push(
-                <div key="variant" className='ozw-field ozw-property-row'>
-                    <label className='ozw-field-label ozw-property-label'>Variant</label>
-                    <select
-                        className='ozw-select ozw-select--md ozw-property-input'
-                        value={this.selectedComponentMetadata.variant as string || 'primary'}
-                        onChange={e => this.handlePropertyChange('variant', e.target.value)}
-                    >
-                        <option value="primary">Primary</option>
-                        <option value="secondary">Secondary</option>
-                        <option value="success">Success</option>
-                        <option value="danger">Danger</option>
-                    </select>
-                </div>
-            );
-            properties.push(
-                <div key="size" className='ozw-field ozw-property-row'>
-                    <label className='ozw-field-label ozw-property-label'>Size</label>
-                    <select
-                        className='ozw-select ozw-select--md ozw-property-input'
-                        value={this.selectedComponentMetadata.size as string || 'medium'}
-                        onChange={e => this.handlePropertyChange('size', e.target.value)}
-                    >
-                        <option value="small">Small</option>
-                        <option value="medium">Medium</option>
-                        <option value="large">Large</option>
-                    </select>
-                </div>
-            );
-        }
+            const sizePreset = (() => {
+                const isFullW = width === '100%';
+                const isFullH = height === '100%';
+                if (!width && !height) {
+                    return 'none';
+                }
+                if (isFullW && !height) {
+                    return 'fullWidth';
+                }
+                if (!width && isFullH) {
+                    return 'fullHeight';
+                }
+                if (isFullW && isFullH) {
+                    return 'fullBoth';
+                }
+                return 'custom';
+            })();
 
-        if (this.selectedComponentType === 'input') {
-            properties.push(
-                <div key="placeholder" className='ozw-field ozw-property-row'>
-                    <label className='ozw-field-label ozw-property-label'>Placeholder</label>
-                    <ControlledInput
-                        value={this.selectedComponentMetadata.placeholder as string || ''}
-                    onChange={value => this.handlePropertyChange('placeholder', value)}
-                        placeholder="Enter placeholder text"
-                        className='ozw-input ozw-input--md ozw-property-input'
-                    />
-                </div>
-            );
-            properties.push(
-                <div key="inputType" className='ozw-field ozw-property-row'>
-                    <label className='ozw-field-label ozw-property-label'>Input Type</label>
-                    <select
-                        className='ozw-select ozw-select--md ozw-property-input'
-                        value={this.selectedComponentMetadata.inputType as string || 'text'}
-                        onChange={e => this.handlePropertyChange('inputType', e.target.value)}
-                    >
-                        <option value="text">Text</option>
-                        <option value="email">Email</option>
-                        <option value="password">Password</option>
-                        <option value="number">Number</option>
-                    </select>
-                </div>
-            );
-        }
+            const storedAlignH = meta.alignH;
+            const storedAlignV = meta.alignV;
+            const alignH = (storedAlignH === 'start' || storedAlignH === 'center' || storedAlignH === 'end')
+                ? storedAlignH
+                : 'start';
+            const alignV = (storedAlignV === 'start' || storedAlignV === 'center' || storedAlignV === 'end')
+                ? storedAlignV
+                : 'center';
+            const weightMode = meta.disableWeight === true ? 'none' : 'weight';
 
-        if (this.selectedComponentType === 'text') {
-            properties.push(
-                <div key="fontSize" className='ozw-field ozw-property-row'>
-                    <label className='ozw-field-label ozw-property-label'>Font Size</label>
-                    <select
-                        className='ozw-select ozw-select--md ozw-property-input'
-                        value={this.selectedComponentMetadata.fontSize as string || '13px'}
-                        onChange={e => this.handlePropertyChange('fontSize', e.target.value)}
-                    >
-                        <option value="11px">Small (11px)</option>
-                        <option value="13px">Medium (13px)</option>
-                        <option value="16px">Large (16px)</option>
-                        <option value="20px">XLarge (20px)</option>
-                    </select>
-                </div>
-            );
-            properties.push(
-                <div key="fontWeight" className='ozw-field ozw-property-row'>
-                    <label className='ozw-field-label ozw-property-label'>Font Weight</label>
-                    <select
-                        className='ozw-select ozw-select--md ozw-property-input'
-                        value={this.selectedComponentMetadata.fontWeight as string || 'normal'}
-                        onChange={e => this.handlePropertyChange('fontWeight', e.target.value)}
-                    >
-                        <option value="normal">Normal</option>
-                        <option value="bold">Bold</option>
-                        <option value="lighter">Light</option>
-                    </select>
-                </div>
-            );
-
-            const isValidHex6 = (value: unknown): value is string =>
-                typeof value === 'string' && /^#[0-9a-fA-F]{6}$/.test(value);
-
-            const legacyTextColor = isValidHex6(this.selectedComponentMetadata.textColor) ? this.selectedComponentMetadata.textColor : undefined;
-            const storedMode = this.selectedComponentMetadata.textColorMode;
-            const textColorMode: TextColorMode = storedMode === 'system' || storedMode === 'custom'
-                ? storedMode
-                : (legacyTextColor ||
-                    isValidHex6(this.selectedComponentMetadata.textColorLight) ||
-                    isValidHex6(this.selectedComponentMetadata.textColorDark))
-                    ? 'custom'
-                    : 'system';
-
-            const textColorLight = isValidHex6(this.selectedComponentMetadata.textColorLight)
-                ? this.selectedComponentMetadata.textColorLight
-                : (legacyTextColor ?? '#000000');
-
-            const textColorDark = isValidHex6(this.selectedComponentMetadata.textColorDark)
-                ? this.selectedComponentMetadata.textColorDark
-                : (legacyTextColor ?? '#ffffff');
-
-            properties.push(
-                <div key="textColorMode" className='ozw-field ozw-property-row'>
-                    <label className='ozw-field-label ozw-property-label'>Text Color</label>
-                    <select
-                        className='ozw-select ozw-select--md ozw-property-input'
-                        value={textColorMode}
-                        onChange={e => {
-                            const value = e.target.value as TextColorMode;
-                            this.handlePropertyChange('textColorMode', value);
-                            if (value === 'custom') {
-                                // Initialize palettes if missing so custom takes effect immediately.
-                                if (!isValidHex6(this.selectedComponentMetadata.textColorLight)) {
-                                    this.handlePropertyChange('textColorLight', textColorLight);
-                                }
-                                if (!isValidHex6(this.selectedComponentMetadata.textColorDark)) {
-                                    this.handlePropertyChange('textColorDark', textColorDark);
-                                }
-                            }
-                        }}
-                    >
-                        <option value="system">System theme</option>
-                        <option value="custom">Custom</option>
-                    </select>
-                </div>
-            );
-
-            if (textColorMode === 'custom') {
-                properties.push(
-                    <div key="textColorLight" className='ozw-field ozw-property-row'>
-                        <label className='ozw-field-label ozw-property-label'>Text Color (Light)</label>
-                        <input
-                            type="color"
-                            className='ozw-color ozw-property-input'
-                            value={textColorLight}
+            return (
+                <React.Fragment>
+                    <div className='ozw-field ozw-property-row'>
+                        <label className='ozw-field-label ozw-property-label'>Tamaño (pesos)</label>
+                        <select
+                            className='ozw-select ozw-select--md ozw-property-input'
+                            value={weightMode}
                             onChange={e => {
-                                this.handlePropertyChange('textColorMode', 'custom');
-                                this.handlePropertyChange('textColorLight', e.target.value);
+                                const value = e.target.value;
+                                if (value === 'none') {
+                                    this.handlePropertyChange('disableWeight', true);
+                                } else {
+                                    this.handlePropertyChange('disableWeight', undefined);
+                                }
                             }}
-                        />
+                        >
+                            <option value='weight'>Usar peso (por defecto)</option>
+                            <option value='none'>Sin pesos (intrínseco)</option>
+                        </select>
+                    </div>
+
+                    <div className='ozw-field ozw-property-row'>
+                        <label className='ozw-field-label ozw-property-label'>Tamaño</label>
+                        <select
+                            className='ozw-select ozw-select--md ozw-property-input'
+                            value={sizePreset}
+                            onChange={e => {
+                                const value = e.target.value;
+                                if (value === 'none') {
+                                    this.handlePropertiesChange({ width: undefined, height: undefined });
+                                } else if (value === 'fullWidth') {
+                                    this.handlePropertiesChange({ width: '100%', height: undefined });
+                                } else if (value === 'fullHeight') {
+                                    this.handlePropertiesChange({ width: undefined, height: '100%' });
+                                } else if (value === 'fullBoth') {
+                                    this.handlePropertiesChange({ width: '100%', height: '100%' });
+                                } else {
+                                    // 'custom': keep current width/height as-is
+                                }
+                            }}
+                        >
+                            <option value='none'>Por defecto (sin tamaño)</option>
+                            <option value='fullWidth'>Full width</option>
+                            <option value='fullHeight'>Full height</option>
+                            <option value='fullBoth'>Full width + height</option>
+                            <option value='custom'>Personalizado</option>
+                        </select>
+                    </div>
+
+                    <div className='ozw-field ozw-property-row'>
+                        <label className='ozw-field-label ozw-property-label'>Alineación horizontal</label>
+                        <select
+                            className='ozw-select ozw-select--md ozw-property-input'
+                            value={alignH}
+                            onChange={e => this.handlePropertyChange('alignH', e.target.value)}
+                        >
+                            <option value='start'>Izquierda</option>
+                            <option value='center'>Centro</option>
+                            <option value='end'>Derecha</option>
+                        </select>
+                    </div>
+
+                    <div className='ozw-field ozw-property-row'>
+                        <label className='ozw-field-label ozw-property-label'>Alineación vertical</label>
+                        <select
+                            className='ozw-select ozw-select--md ozw-property-input'
+                            value={alignV}
+                            onChange={e => this.handlePropertyChange('alignV', e.target.value)}
+                        >
+                            <option value='start'>Arriba</option>
+                            <option value='center'>Centro</option>
+                            <option value='end'>Abajo</option>
+                        </select>
+                    </div>
+                </React.Fragment>
+            );
+        };
+
+        const renderField = (field: ReturnType<typeof getPropertyFieldsForType>[number]): React.ReactNode => {
+            if (field.visible && !field.visible(type, this.selectedComponentMetadata)) {
+                return undefined;
+            }
+
+            if (field.kind === 'customTextColor') {
+                return (
+                    <React.Fragment key="customTextColor">
+                        {renderCustomTextColorFields({
+                            metadata: this.selectedComponentMetadata,
+                            onChange: (changedKey, changedValue) => this.handlePropertyChange(changedKey, changedValue)
+                        })}
+                    </React.Fragment>
+                );
+            }
+
+            const propertyKey = field.key;
+            const stored = (this.selectedComponentMetadata as Record<string, unknown>)[propertyKey];
+            const fallback = (defaults as Record<string, unknown>)[propertyKey] ?? field.defaultValue;
+
+            if (field.kind === 'select') {
+                const selectedValue = (typeof stored === 'string' && stored.length > 0)
+                    ? stored
+                    : (typeof fallback === 'string' ? fallback : '');
+                return (
+                    <div key={propertyKey} className='ozw-field ozw-property-row'>
+                        <label className='ozw-field-label ozw-property-label'>{field.label}</label>
+                        <select
+                            className='ozw-select ozw-select--md ozw-property-input'
+                            value={selectedValue}
+                            onChange={e => this.handlePropertyChange(propertyKey, e.target.value)}
+                        >
+                            {field.options.map(opt => (
+                                <option key={opt.value} value={opt.value}>{opt.label}</option>
+                            ))}
+                        </select>
                     </div>
                 );
-                properties.push(
-                    <div key="textColorDark" className='ozw-field ozw-property-row'>
-                        <label className='ozw-field-label ozw-property-label'>Text Color (Dark)</label>
+            }
+
+            if (field.kind === 'color') {
+                const colorValue = (typeof stored === 'string' && stored.length > 0)
+                    ? stored
+                    : (typeof fallback === 'string' ? fallback : '#000000');
+                return (
+                    <div key={propertyKey} className='ozw-field ozw-property-row'>
+                        <label className='ozw-field-label ozw-property-label'>{field.label}</label>
                         <input
                             type="color"
                             className='ozw-color ozw-property-input'
-                            value={textColorDark}
-                            onChange={e => {
-                                this.handlePropertyChange('textColorMode', 'custom');
-                                this.handlePropertyChange('textColorDark', e.target.value);
-                            }}
+                            value={colorValue}
+                            onChange={e => this.handlePropertyChange(propertyKey, e.target.value)}
                         />
                     </div>
                 );
             }
+
+            // input | number
+            const inputType = field.kind === 'number' ? 'number' : 'text';
+            const inputValue = (() => {
+                if (field.kind === 'number') {
+                    const parsed = typeof stored === 'number' ? stored : typeof stored === 'string' ? Number(stored) : NaN;
+                    if (Number.isFinite(parsed)) {
+                        return String(parsed);
+                    }
+                    if (typeof fallback === 'number') {
+                        return String(fallback);
+                    }
+                    return '';
+                }
+                return typeof stored === 'string' ? stored : typeof fallback === 'string' ? fallback : '';
+            })();
+
+            return (
+                <div key={propertyKey} className='ozw-field ozw-property-row'>
+                    <label className='ozw-field-label ozw-property-label'>{field.label}</label>
+                    <ControlledInput
+                        type={inputType}
+                        value={inputValue}
+                        onChange={raw => {
+                            const normalized = field.normalize ? field.normalize(raw) : raw;
+                            this.handlePropertyChange(propertyKey, normalized);
+                        }}
+                        placeholder={field.placeholder}
+                        className='ozw-input ozw-input--md ozw-property-input'
+                    />
+                </div>
+            );
+        };
+
+        return (
+            <React.Fragment>
+                {renderLayoutControls()}
+                {fields.map(renderField)}
+            </React.Fragment>
+        );
+    }
+
+    protected handlePropertiesChange(changes: Record<string, unknown>): void {
+        if (!this.selectedComponentId) {
+            return;
         }
 
-        // Layout properties for containers
-        if (this.selectedComponentType === 'column' || this.selectedComponentType === 'row') {
-            properties.push(
-                <div key="gap" className='ozw-field ozw-property-row'>
-                    <label className='ozw-field-label ozw-property-label'>Gap</label>
-                    <select
-                        className='ozw-select ozw-select--md ozw-property-input'
-                        value={this.selectedComponentMetadata.gap as string || '8px'}
-                        onChange={e => this.handlePropertyChange('gap', e.target.value)}
-                    >
-                        <option value="0">None</option>
-                        <option value="4px">Small (4px)</option>
-                        <option value="8px">Medium (8px)</option>
-                        <option value="12px">Large (12px)</option>
-                        <option value="16px">XLarge (16px)</option>
-                    </select>
-                </div>
-            );
-            properties.push(
-                <div key="padding" className='ozw-field ozw-property-row'>
-                    <label className='ozw-field-label ozw-property-label'>Padding</label>
-                    <select
-                        className='ozw-select ozw-select--md ozw-property-input'
-                        value={this.selectedComponentMetadata.padding as string || '8px'}
-                        onChange={e => this.handlePropertyChange('padding', e.target.value)}
-                    >
-                        <option value="0">None</option>
-                        <option value="4px">Small (4px)</option>
-                        <option value="8px">Medium (8px)</option>
-                        <option value="12px">Large (12px)</option>
-                        <option value="16px">XLarge (16px)</option>
-                    </select>
-                </div>
-            );
-            properties.push(
-                <div key="alignment" className='ozw-field ozw-property-row'>
-                    <label className='ozw-field-label ozw-property-label'>Alignment</label>
-                    <select
-                        className='ozw-select ozw-select--md ozw-property-input'
-                        value={this.selectedComponentMetadata.alignment as string || 'start'}
-                        onChange={e => this.handlePropertyChange('alignment', e.target.value)}
-                    >
-                        <option value="start">Start</option>
-                        <option value="center">Center</option>
-                        <option value="end">End</option>
-                        <option value="stretch">Stretch</option>
-                    </select>
-                </div>
-            );
+        for (const [property, value] of Object.entries(changes)) {
+            this.selectedComponentMetadata[property] = value;
         }
+        this.update();
 
-        // Common styling properties
-        properties.push(
-            <div key="width" className='ozw-field ozw-property-row'>
-                <label className='ozw-field-label ozw-property-label'>Width</label>
-                <ControlledInput
-                    value={this.selectedComponentMetadata.width as string || ''}
-                    onChange={value => this.handlePropertyChange('width', value)}
-                    placeholder="auto"
-                    className='ozw-input ozw-input--md ozw-property-input'
-                />
-            </div>
-        );
-
-        properties.push(
-            <div key="height" className='ozw-field ozw-property-row'>
-                <label className='ozw-field-label ozw-property-label'>Height</label>
-                <ControlledInput
-                    value={this.selectedComponentMetadata.height as string || ''}
-                    onChange={value => this.handlePropertyChange('height', value)}
-                    placeholder="auto"
-                    className='ozw-input ozw-input--md ozw-property-input'
-                />
-            </div>
-        );
-
-        // Weight (proportional) - applies when the selected component is a direct child of row/column.
-        const rawWeight = this.selectedComponentMetadata.weight as unknown;
-        const weightValue = typeof rawWeight === 'number'
-            ? rawWeight
-            : typeof rawWeight === 'string'
-                ? Number(rawWeight)
-                : undefined;
-
-        properties.push(
-            <div key="weight" className='ozw-field ozw-property-row'>
-                <label className='ozw-field-label ozw-property-label'>Peso</label>
-                <ControlledInput
-                    type='number'
-                    value={String((typeof weightValue === 'number' && Number.isFinite(weightValue) && weightValue > 0) ? weightValue : 1)}
-                    onChange={value => {
-                        const trimmed = value.trim();
-                        if (!trimmed) {
-                            this.handlePropertyChange('weight', undefined);
-                            return;
-                        }
-                        const parsed = Number(trimmed);
-                        this.handlePropertyChange('weight', (Number.isFinite(parsed) && parsed > 0) ? parsed : 1);
-                    }}
-                    placeholder="1"
-                    className='ozw-input ozw-input--md ozw-property-input'
-                />
-            </div>
-        );
-
-        return properties;
+        if (this.onPropertyChangeCallback) {
+            for (const [property, value] of Object.entries(changes)) {
+                this.onPropertyChangeCallback({
+                    componentId: this.selectedComponentId,
+                    property,
+                    value
+                });
+            }
+        }
     }
 
     protected handlePropertyChange(property: string, value: unknown): void {
