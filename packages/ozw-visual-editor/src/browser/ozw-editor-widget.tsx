@@ -21,7 +21,7 @@ import { MessageService } from '@theia/core/lib/common/message-service';
 import { MonacoEditorProvider } from '@theia/monaco/lib/browser/monaco-editor-provider';
 import { MonacoEditor } from '@theia/monaco/lib/browser/monaco-editor';
 import URI from '@theia/core/lib/common/uri';
-import { SplitPanel } from '@lumino/widgets';
+import { SplitPanel } from '@theia/core/shared/@lumino/widgets';
 import { OzwPropertiesWidget } from './ozw-properties-widget';
 import { OzwToolboxWidget } from './ozw-toolbox-widget';
 import { FileService } from '@theia/filesystem/lib/browser/file-service';
@@ -664,12 +664,6 @@ export class OzwEditorWidget extends BaseWidget implements Saveable, SaveableSou
         this.canvasContainer.innerHTML = '';
         console.log('🧹 renderCanvas: Canvas cleared');
 
-        // Create canvas header
-        const header = document.createElement('div');
-        header.className = 'ozw-canvas-header';
-        header.innerHTML = '<h3>Visual Canvas</h3><p>Drag components from the toolbox to start building</p>';
-        this.canvasContainer.appendChild(header);
-
         // Create canvas workspace
         const workspace = document.createElement('div');
         workspace.className = 'ozw-canvas-workspace';
@@ -693,13 +687,11 @@ export class OzwEditorWidget extends BaseWidget implements Saveable, SaveableSou
                 return;
             }
 
-            // Deselect if clicking directly on workspace, empty state, or header
+            // Deselect if clicking directly on workspace or empty state
             // But not if clicking on a component or its children
             if (target === workspace ||
                 target.classList.contains('ozw-empty-state') ||
-                target.closest('.ozw-empty-state') ||
-                target.classList.contains('ozw-canvas-header') ||
-                target.closest('.ozw-canvas-header')) {
+                target.closest('.ozw-empty-state')) {
                 // Check if we're not clicking on a component
                 if (!target.closest('.ozw-component')) {
                     this.deselectComponent();
@@ -1989,7 +1981,7 @@ export class OzwEditorWidget extends BaseWidget implements Saveable, SaveableSou
                     OzwPropertiesWidget.ID
                 );
                 if (propertiesWidget) {
-                    propertiesWidget.setSelectedComponent(undefined, undefined, {});
+                    propertiesWidget.setSelectedComponent(undefined, undefined, {}, undefined);
                 }
             }
         } catch (error) {
@@ -2024,10 +2016,10 @@ export class OzwEditorWidget extends BaseWidget implements Saveable, SaveableSou
                     const metadata = this._document.schema.metadata[componentId] || {};
                     console.log('📝 Metadata:', metadata);
 
-                    propertiesWidget.setSelectedComponent(componentId, component.type, metadata);
+                    propertiesWidget.setSelectedComponent(componentId, component.type, metadata, this._document.components.map(c => c.id));
 
                     // Setup property change listener
-                    propertiesWidget.onPropertyChange((event) => {
+                    propertiesWidget.onPropertyChange(event => {
                         this.handlePropertyChange(event.componentId, event.property, event.value);
                     });
 
@@ -2058,16 +2050,32 @@ export class OzwEditorWidget extends BaseWidget implements Saveable, SaveableSou
     protected handlePropertyChange(componentId: string, property: string, value: unknown): void {
         console.log('🔧 handlePropertyChange:', { componentId, property, value, mode: this._mode });
 
+        if (property === '__renameId') {
+            const newId = typeof value === 'string' ? value.trim() : '';
+            if (newId.length > 0 && newId !== componentId) {
+                this.renameComponentId(componentId, newId);
+            }
+            return;
+        }
+
         // Update metadata
         if (!this._document.schema.metadata[componentId]) {
             this._document.schema.metadata[componentId] = {};
         }
-        this._document.schema.metadata[componentId][property] = value;
+        if (value === undefined) {
+            delete this._document.schema.metadata[componentId][property];
+        } else {
+            this._document.schema.metadata[componentId][property] = value;
+        }
 
         // Update component properties
         const component = this._document.components.find(c => c.id === componentId);
         if (component) {
-            component.properties[property] = value;
+            if (value === undefined) {
+                delete component.properties[property];
+            } else {
+                component.properties[property] = value;
+            }
             console.log('✅ handlePropertyChange: Component updated:', component);
         } else {
             console.warn('⚠️ handlePropertyChange: Component not found:', componentId);
@@ -2078,6 +2086,54 @@ export class OzwEditorWidget extends BaseWidget implements Saveable, SaveableSou
         console.log('🔄 handlePropertyChange: Calling syncToTextIfNeeded()');
         this.syncToTextIfNeeded();
         this.renderCanvas();
+    }
+
+    protected renameComponentId(oldId: string, newId: string): void {
+        // Ensure uniqueness
+        if (this._document.components.some(c => c.id === newId)) {
+            this.messageService.warn(`El ID "${newId}" ya existe.`);
+            return;
+        }
+
+        const component = this._document.components.find(c => c.id === oldId);
+        if (!component) {
+            return;
+        }
+
+        // Update components array
+        component.id = newId;
+
+        // Move metadata entry
+        const existingMeta = this._document.schema.metadata[oldId];
+        if (existingMeta) {
+            this._document.schema.metadata[newId] = existingMeta;
+            delete this._document.schema.metadata[oldId];
+        } else if (!this._document.schema.metadata[newId]) {
+            this._document.schema.metadata[newId] = {};
+        }
+
+        // Update tree ids
+        const visit = (nodes: TreeNode[]): void => {
+            for (const node of nodes) {
+                if (node.id === oldId) {
+                    node.id = newId;
+                }
+                if (node.children) {
+                    visit(node.children);
+                }
+            }
+        };
+        visit(this._document.schema.tree);
+
+        // Keep selection
+        if (this._selectedComponentId === oldId) {
+            this._selectedComponentId = newId;
+        }
+
+        this.dirty = true;
+        this.syncToTextIfNeeded();
+        this.renderCanvas();
+        this.updatePropertiesWidget(newId);
     }
 
     protected deleteComponent(componentId: string): void {

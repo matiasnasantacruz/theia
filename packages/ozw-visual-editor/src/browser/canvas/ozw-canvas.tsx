@@ -308,10 +308,6 @@ export const OzwCanvas: React.FC<OzwCanvasProps> = props => {
 
     return (
         <React.Fragment>
-            <div className='ozw-canvas-header'>
-                <h3>Visual Canvas</h3>
-                <p>Drag components from the toolbox to start building</p>
-            </div>
             <div
                 className='ozw-canvas-workspace'
                 style={{

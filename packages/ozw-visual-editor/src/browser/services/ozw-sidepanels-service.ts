@@ -37,7 +37,7 @@ export class OzwSidePanelsService {
         await this.shell.activateWidget(toolboxWidget.id);
 
         const propertiesWidget = await this.getPropertiesWidget();
-        propertiesWidget.setSelectedComponent(undefined, undefined, {});
+        propertiesWidget.setSelectedComponent(undefined, undefined, {}, undefined);
     }
 
     async showProperties(
@@ -47,7 +47,7 @@ export class OzwSidePanelsService {
         onPropertyChange: (event: PropertyChangeEvent) => void
     ): Promise<void> {
         const propertiesWidget = await this.getPropertiesWidget();
-        propertiesWidget.setSelectedComponent(componentId, componentType, metadata);
+        propertiesWidget.setSelectedComponent(componentId, componentType, metadata, undefined);
 
         if (!this.isPropertyListenerRegistered) {
             this.isPropertyListenerRegistered = true;

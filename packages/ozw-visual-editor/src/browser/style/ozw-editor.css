@@ -67,22 +67,6 @@
     flex-direction: column;
 }
 
-.ozw-canvas-header {
-    margin-bottom: 16px;
-    text-align: center;
-}
-
-.ozw-canvas-header h3 {
-    margin: 0 0 8px 0;
-    color: var(--theia-foreground);
-}
-
-.ozw-canvas-header p {
-    margin: 0;
-    color: var(--theia-descriptionForeground);
-    font-size: 13px;
-}
-
 .ozw-canvas-workspace {
     flex: 1;
     min-height: 400px;
