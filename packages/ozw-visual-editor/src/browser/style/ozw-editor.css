@@ -92,6 +92,42 @@
     flex: 1;
     overflow: hidden;
     display: none;
+    position: relative;
+    width: 100%;
+    height: 100%;
+}
+
+/* Ensure Monaco editor container fills the space properly */
+.ozw-text-editor-container > div {
+    width: 100% !important;
+    height: 100% !important;
+    overflow: hidden !important;
+    box-sizing: border-box !important;
+}
+
+/* Ensure Monaco editor has proper spacing and line numbers are fully visible */
+.ozw-text-editor-container .monaco-editor {
+    width: 100% !important;
+    height: 100% !important;
+    box-sizing: border-box !important;
+}
+
+/* Ensure line numbers area is fully visible and not cut off */
+.ozw-text-editor-container .monaco-editor .margin {
+    background-color: var(--theia-editor-lineNumberBackground) !important;
+    min-width: 0 !important;
+}
+
+/* Ensure the editor content area doesn't overflow */
+.ozw-text-editor-container .monaco-editor .monaco-editor-background {
+    width: 100% !important;
+    box-sizing: border-box !important;
+}
+
+/* Fix for split panel - ensure container doesn't create scrollbars */
+#ozw-split-panel .ozw-text-editor-container {
+    min-width: 0 !important;
+    min-height: 0 !important;
 }
 
 .ozw-component {
@@ -264,8 +300,16 @@
 
 #ozw-split-panel {
     flex: 1;
+    overflow: hidden;
 }
 
+/* Prevent double scrollbars - let Monaco handle its own scrolling */
 #ozw-split-panel .lm-Widget {
-    overflow: auto;
+    overflow: hidden !important;
+}
+
+/* Ensure text editor container in split view doesn't create its own scrollbar */
+#ozw-split-panel .ozw-text-editor-container {
+    overflow: hidden !important;
+    display: block !important;
 }

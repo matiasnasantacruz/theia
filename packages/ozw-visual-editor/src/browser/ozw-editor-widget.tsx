@@ -109,6 +109,9 @@ export class OzwEditorWidget extends BaseWidget implements Saveable, SaveableSou
     protected _isSyncingToText = false;
     protected _syncToTextTimeout: number | undefined;
     protected _syncFromTextTimeout: number | undefined;
+    protected _refreshTimeout: number | undefined;
+    protected _lastResizeDimensions: { width: number; height: number } | undefined;
+    protected _resizeObserver: ResizeObserver | undefined;
 
     get uri(): URI {
         return this._uri;
@@ -194,12 +197,15 @@ export class OzwEditorWidget extends BaseWidget implements Saveable, SaveableSou
         const editorNode = document.createElement('div');
         editorNode.style.width = '100%';
         editorNode.style.height = '100%';
+        editorNode.style.overflow = 'hidden';
+        editorNode.style.position = 'relative';
         this.textEditorContainer.appendChild(editorNode);
         
         // Use createInline which sets suppressOpenEditorWhenDirty = true to prevent opening as separate tab
+        // Use automaticLayout: true but with controlled refresh to prevent flickering
         const editor = await this.editorProvider.createInline(this._uri, editorNode, {
             language: 'json',
-            automaticLayout: true,
+            automaticLayout: true, // Re-enabled but we'll control refresh timing
             wordWrap: 'off',
             lineNumbers: 'on',
             folding: true, // Enable code folding for JSON
@@ -243,13 +249,47 @@ export class OzwEditorWidget extends BaseWidget implements Saveable, SaveableSou
         }));
     }
 
+    protected setupResizeObserver(container: HTMLElement): void {
+        // Disconnect existing observer if any
+        if (this._resizeObserver) {
+            this._resizeObserver.disconnect();
+        }
+
+        // Create new ResizeObserver with debouncing to prevent excessive refreshes
+        // This helps prevent flickering when automaticLayout is enabled
+        this._resizeObserver = new ResizeObserver((entries) => {
+            // Only refresh if editor exists and is in split mode
+            if (!this.textEditor || this._mode !== 'split') {
+                return;
+            }
+
+            // Debounce refresh calls to prevent rapid successive refreshes
+            if (this._refreshTimeout !== undefined) {
+                clearTimeout(this._refreshTimeout);
+            }
+
+            this._refreshTimeout = window.setTimeout(() => {
+                if (this.textEditor && this._mode === 'split') {
+                    // Only refresh if container is actually visible
+                    const rect = container.getBoundingClientRect();
+                    if (rect.width > 0 && rect.height > 0) {
+                        this.textEditor.refresh();
+                    }
+                }
+                this._refreshTimeout = undefined;
+            }, 100); // Increased delay to batch resize events and reduce flickering
+        });
+
+        this._resizeObserver.observe(container);
+    }
+
     @postConstruct()
     protected init(): void {
         this.addClass('ozw-editor-widget');
         this.toDispose.push(this.toDisposeOnEditor);
         this.toDispose.push(this.onDirtyChangedEmitter);
         
-        // Cleanup timeouts on dispose
+        // Cleanup timeouts and observers on dispose
         this.toDispose.push({
             dispose: () => {
                 if (this._syncToTextTimeout !== undefined) {
@@ -259,6 +299,14 @@ export class OzwEditorWidget extends BaseWidget implements Saveable, SaveableSou
                 if (this._syncFromTextTimeout !== undefined) {
                     clearTimeout(this._syncFromTextTimeout);
                     this._syncFromTextTimeout = undefined;
+                }
+                if (this._refreshTimeout !== undefined) {
+                    clearTimeout(this._refreshTimeout);
+                    this._refreshTimeout = undefined;
+                }
+                if (this._resizeObserver) {
+                    this._resizeObserver.disconnect();
+                    this._resizeObserver = undefined;
                 }
             }
         });
@@ -323,6 +371,12 @@ export class OzwEditorWidget extends BaseWidget implements Saveable, SaveableSou
     protected updateLayout(): void {
         // Dispose split panel if exists and preserve containers
         if (this.splitPanel) {
+            // Disconnect resize observer when leaving split mode
+            if (this._resizeObserver) {
+                this._resizeObserver.disconnect();
+                this._resizeObserver = undefined;
+            }
+
             // Remove widgets from split panel before disposing to preserve nodes
             if (this.canvasWidget && this.splitPanel.widgets.indexOf(this.canvasWidget) !== -1) {
                 this.splitPanel.layout?.removeWidget(this.canvasWidget);
@@ -371,10 +425,10 @@ export class OzwEditorWidget extends BaseWidget implements Saveable, SaveableSou
                 if (this.textEditor) {
                     // Sync document to text editor before showing
                     this.syncToText();
-                    // Use setTimeout to ensure the container is visible before refreshing
-                    setTimeout(() => {
+                    // Use requestAnimationFrame to ensure the container is visible before refreshing
+                    requestAnimationFrame(() => {
                         this.textEditor?.refresh();
-                    }, 0);
+                    });
                 }
                 break;
             case 'split':
@@ -430,11 +484,20 @@ export class OzwEditorWidget extends BaseWidget implements Saveable, SaveableSou
 
         Widget.attach(this.splitPanel, this.node);
 
-        // Use setTimeout to ensure the container is visible before refreshing
-        if (this.textEditor) {
-            setTimeout(() => {
-                this.textEditor?.refresh();
-            }, 0);
+        // Setup resize observer and refresh editor when entering split mode
+        if (this.textEditorContainer && this.textEditor) {
+            // Find the actual editor node inside the container
+            const editorNode = this.textEditorContainer.querySelector('div[class*="monaco"]') as HTMLElement || this.textEditorContainer;
+            
+            // Wait for split panel to settle before setting up observer and refreshing
+            requestAnimationFrame(() => {
+                requestAnimationFrame(() => {
+                    // Setup observer to help control refresh timing
+                    this.setupResizeObserver(editorNode);
+                    // Force initial refresh to ensure editor is properly sized
+                    this.textEditor?.refresh();
+                });
+            });
         }
     }
 
@@ -1078,11 +1141,31 @@ export class OzwEditorWidget extends BaseWidget implements Saveable, SaveableSou
 
     protected override onResize(msg: Widget.ResizeMessage): void {
         super.onResize(msg);
-        if (this.textEditor) {
-            this.textEditor.refresh();
-        }
-        if (this.splitPanel) {
-            this.splitPanel.update();
+        
+        // Only refresh if dimensions actually changed to prevent flickering
+        const currentWidth = msg.width;
+        const currentHeight = msg.height;
+        const hasChanged = !this._lastResizeDimensions || 
+            this._lastResizeDimensions.width !== currentWidth || 
+            this._lastResizeDimensions.height !== currentHeight;
+        
+        if (hasChanged) {
+            this._lastResizeDimensions = { width: currentWidth, height: currentHeight };
+            
+            // Update split panel immediately
+            if (this.splitPanel) {
+                this.splitPanel.update();
+            }
+            
+            // Debounce editor refresh calls to prevent rapid successive refreshes
+            // The ResizeObserver will handle editor refresh in split mode
+            if (this._mode !== 'split') {
+                // In non-split modes, refresh immediately (automaticLayout handles it)
+                if (this.textEditor) {
+                    this.textEditor.refresh();
+                }
+            }
+            // In split mode, let the ResizeObserver handle the refresh with its debouncing
         }
     }
 
