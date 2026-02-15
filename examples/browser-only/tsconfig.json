@@ -102,6 +102,9 @@
       "path": "../../packages/output"
     },
     {
+      "path": "../../packages/ozrical-blueprint"
+    },
+    {
       "path": "../../packages/ozw-visual-editor"
     },
     {

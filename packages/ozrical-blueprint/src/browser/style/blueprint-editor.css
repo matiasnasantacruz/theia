@@ -1,0 +1,174 @@
+.blueprint-editor-widget,
+.blueprint-editor-root {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    outline: none;
+}
+
+.blueprint-editor-toolbar {
+    display: flex;
+    gap: 8px;
+    padding: 6px 10px;
+    background: var(--theia-editorGroupHeader-tabsBackground);
+    border-bottom: 1px solid var(--theia-panel-border);
+}
+
+.blueprint-editor-toolbar select {
+    padding: 4px 8px;
+}
+
+.blueprint-editor-toolbar button {
+    padding: 4px 12px;
+}
+
+.blueprint-editor-canvas-wrap {
+    flex: 1;
+    min-height: 0;
+    position: relative;
+}
+
+.blueprint-canvas-container {
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    position: relative;
+    background: var(--theia-editor-background);
+}
+
+.blueprint-canvas-viewport {
+    transform-origin: 0 0;
+    position: absolute;
+    min-width: 8000px;
+    min-height: 8000px;
+    left: 0;
+    top: 0;
+}
+
+.blueprint-canvas-node {
+    position: absolute;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 0 12px;
+    border: 2px solid #007acc;
+    border-radius: 6px;
+    background: var(--theia-editor-background);
+    cursor: move;
+    font-size: 12px;
+}
+
+.blueprint-canvas-node.selected {
+    border-color: var(--theia-focusBorder);
+    box-shadow: 0 0 0 1px var(--theia-focusBorder);
+}
+
+.blueprint-canvas-node--app-router {
+    border-color: var(--theia-badge-background);
+    border-width: 2px;
+    font-weight: 600;
+}
+
+.blueprint-canvas-node-label {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.blueprint-canvas-node-handle {
+    position: absolute;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: var(--theia-badge-background);
+    border: 2px solid var(--theia-editor-background);
+    flex-shrink: 0;
+    cursor: crosshair;
+    top: 50%;
+    transform: translateY(-50%);
+}
+
+.blueprint-canvas-node-handle:hover {
+    background: var(--theia-focusBorder);
+}
+
+.blueprint-canvas-node-handle--input {
+    left: -5px;
+}
+
+.blueprint-canvas-node-handle--output {
+    right: -5px;
+}
+
+.blueprint-toolbox-widget .blueprint-toolbox-container {
+    padding: 10px;
+}
+
+.blueprint-toolbox-header h3,
+.blueprint-inspector-header h3 {
+    margin: 0 0 4px 0;
+    font-size: 14px;
+}
+
+.blueprint-toolbox-header p,
+.blueprint-inspector-header p {
+    margin: 0 0 10px 0;
+    font-size: 12px;
+    color: var(--theia-descriptionForeground);
+}
+
+.blueprint-toolbox-section {
+    margin-bottom: 12px;
+}
+
+.blueprint-toolbox-section--root .blueprint-toolbox-item--app-router {
+    font-weight: 600;
+    border-left: 3px solid var(--theia-focusBorder);
+    padding-left: 7px;
+}
+
+.blueprint-toolbox-section h4 {
+    margin: 0 0 6px 0;
+    font-size: 11px;
+    text-transform: uppercase;
+    color: var(--theia-descriptionForeground);
+}
+
+.blueprint-toolbox-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 10px;
+    margin-bottom: 4px;
+    border-radius: 4px;
+    cursor: grab;
+    font-size: 12px;
+}
+
+.blueprint-toolbox-item:hover {
+    background: var(--theia-list-hoverBackground);
+}
+
+.blueprint-toolbox-item i {
+    width: 16px;
+    text-align: center;
+}
+
+.blueprint-inspector-widget .blueprint-inspector-container {
+    padding: 10px;
+}
+
+.blueprint-inspector-section {
+    margin-bottom: 16px;
+}
+
+.blueprint-inspector-section h4 {
+    margin: 0 0 6px 0;
+    font-size: 12px;
+}
+
+.blueprint-inspector-hint {
+    margin: 0;
+    font-size: 11px;
+    color: var(--theia-descriptionForeground);
+}
