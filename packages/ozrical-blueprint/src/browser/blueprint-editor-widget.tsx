@@ -19,24 +19,24 @@ import {
     WidgetManager,
     ApplicationShell
 } from '@theia/core/lib/browser';
-import { DisposableCollection, Emitter, Event } from '@theia/core/lib/common';
+import { CommandRegistry, DisposableCollection, Emitter, Event } from '@theia/core/lib/common';
 import { MessageService } from '@theia/core/lib/common/message-service';
 import URI from '@theia/core/lib/common/uri';
+import { OpenerService, open as openUri } from '@theia/core/lib/browser/opener-service';
 import * as React from '@theia/core/shared/react';
 import { createRoot, Root } from '@theia/core/shared/react-dom/client';
 import { FileService } from '@theia/filesystem/lib/browser/file-service';
 import type { BlueprintDocument, Position } from '../domain/entities/blueprint-types';
+import type { BlueprintNodeType } from '../domain/entities/blueprint-types';
 import { createEmptyBlueprint } from '../domain/factory';
+import { WorkspaceService } from '@theia/workspace/lib/browser/workspace-service';
+import { OzwResourceProvider } from './services/ozw-resource-provider';
+import { BlueprintSelectionService } from './services/blueprint-selection-service';
+import { OzwResourcePickerDialog } from './dialogs/ozw-resource-picker-dialog';
 import { BlueprintSerializer } from '../infrastructure/storage/blueprint-serializer';
-import {
-    applyCommand,
-    type CreateNodeCommand,
-    type MoveNodeCommand,
-    type DeleteNodeCommand,
-    type CreateEdgeCommand,
-    type DeleteEdgeCommand
-} from '../application/commands/blueprint-commands';
-import { BlueprintCanvas } from './canvas/blueprint-canvas';
+import { applyCommand, type BlueprintCommand } from '../application/commands/blueprint-commands';
+import { BlueprintCanvas, type ViewportApi } from './canvas/blueprint-canvas';
+import { BlueprintEditorRefService } from './services/blueprint-editor-ref-service';
 
 const MAX_UNDO = 50;
 
@@ -61,6 +61,27 @@ export class BlueprintEditorWidget extends BaseWidget implements Saveable, Savea
     @inject(BlueprintSerializer)
     protected readonly serializer: BlueprintSerializer;
 
+    @inject(WorkspaceService)
+    protected readonly workspaceService: WorkspaceService;
+
+    @inject(OzwResourceProvider)
+    protected readonly ozwResourceProvider: OzwResourceProvider;
+
+    @inject(OzwResourcePickerDialog)
+    protected readonly ozwResourcePickerDialog: OzwResourcePickerDialog;
+
+    @inject(OpenerService)
+    protected readonly openerService: OpenerService;
+
+    @inject(BlueprintSelectionService)
+    protected readonly blueprintSelectionService: BlueprintSelectionService;
+
+    @inject(BlueprintEditorRefService)
+    protected readonly blueprintEditorRefService: BlueprintEditorRefService;
+
+    @inject(CommandRegistry)
+    protected readonly commandRegistry: CommandRegistry;
+
     protected readonly onDirtyChangedEmitter = new Emitter<void>();
     readonly onDirtyChanged: Event<void> = this.onDirtyChangedEmitter.event;
     readonly onContentChanged: Event<void> = this.onDirtyChangedEmitter.event;
@@ -76,6 +97,7 @@ export class BlueprintEditorWidget extends BaseWidget implements Saveable, Savea
     protected _isInitialized = false;
     protected root: Root | undefined;
     protected override toDispose = new DisposableCollection();
+    protected readonly viewportApiRef: React.MutableRefObject<ViewportApi | null> = { current: null };
 
     constructor() {
         super();
@@ -135,6 +157,7 @@ export class BlueprintEditorWidget extends BaseWidget implements Saveable, Savea
         this._selectedNodeId = undefined;
         this._isInitialized = true;
         this._dirty = false;
+        this.blueprintSelectionService.setState(this._document, null, null, this._uri?.toString() ?? null);
         this.update();
     }
 
@@ -162,14 +185,51 @@ export class BlueprintEditorWidget extends BaseWidget implements Saveable, Savea
         this.update();
     }
 
-    protected applyAndPush(cmd: CreateNodeCommand | MoveNodeCommand | DeleteNodeCommand | CreateEdgeCommand | DeleteEdgeCommand): void {
+    protected applyAndPush(cmd: BlueprintCommand): void {
         this.pushUndo();
         this._document = applyCommand(this._document, cmd);
+        if (cmd.kind === 'DeleteNode' && cmd.nodeId === this._selectedNodeId) {
+            this._selectedNodeId = undefined;
+        }
+        if (cmd.kind === 'DeleteEdge' && cmd.edgeId === this._selectedEdgeId) {
+            this._selectedEdgeId = undefined;
+        }
         this.dirty = true;
+        this.blueprintSelectionService.setState(
+            this._document,
+            this._selectedNodeId ?? null,
+            this._selectedEdgeId ?? null,
+            this._uri?.toString() ?? null
+        );
         this.update();
     }
 
-    protected handleDropNode = (type: CreateNodeCommand['type'], label: string, position: Position): void => {
+    protected handleDropNode = async (type: BlueprintNodeType, label: string, position: Position): Promise<void> => {
+        const needsOzwLink = type === 'menu' || type === 'view' || type === 'modal';
+        if (needsOzwLink) {
+            const wsRoot = this.workspaceService.getWorkspaceRootUri(this._uri);
+            if (!wsRoot) {
+                this.messageService.warn('Abrí un workspace para vincular vistas OZW.');
+                return;
+            }
+            const resources = await this.ozwResourceProvider.listOzwResources(wsRoot);
+            this.ozwResourcePickerDialog.setContext(wsRoot, resources);
+            const result = await this.ozwResourcePickerDialog.open();
+            if (result) {
+                this.applyAndPush({
+                    kind: 'CreateNode',
+                    type,
+                    label: result.label,
+                    position,
+                    payload: {
+                        resourceId: result.resourceId,
+                        route: result.route,
+                        linkedResourceStatus: 'linked'
+                    }
+                });
+            }
+            return;
+        }
         this.applyAndPush({ kind: 'CreateNode', type, label, position });
     };
 
@@ -194,6 +254,17 @@ export class BlueprintEditorWidget extends BaseWidget implements Saveable, Savea
         this.applyAndPush({ kind: 'DeleteEdge', edgeId });
     };
 
+    protected handleNodeDoubleClick = (nodeId: string): void => {
+        const node = this._document.nodes.find(n => n.id === nodeId);
+        if (!node) { return; }
+        const resourceId = (node as { resourceId?: string }).resourceId;
+        if (!resourceId || typeof resourceId !== 'string') { return; }
+        const wsRoot = this.workspaceService.getWorkspaceRootUri(this._uri);
+        if (!wsRoot) { return; }
+        const uri = wsRoot.resolve(resourceId);
+        openUri(this.openerService, uri);
+    };
+
     async save(): Promise<void> {
         const content = this.serializer.stringify(this._document);
         await this.fileService.write(this._uri, content);
@@ -203,7 +274,12 @@ export class BlueprintEditorWidget extends BaseWidget implements Saveable, Savea
 
     protected override onActivateRequest(msg: Message): void {
         super.onActivateRequest(msg);
+        this.blueprintEditorRefService.setCurrentEditor(this);
         this.node.querySelector<HTMLElement>('.blueprint-editor-root')?.focus();
+    }
+
+    applyCommand(cmd: BlueprintCommand): void {
+        this.applyAndPush(cmd);
     }
 
     protected override onUpdateRequest(msg: Message): void {
@@ -215,6 +291,9 @@ export class BlueprintEditorWidget extends BaseWidget implements Saveable, Savea
     }
 
     override dispose(): void {
+        if (this.blueprintEditorRefService.getCurrentEditor() === this) {
+            this.blueprintEditorRefService.setCurrentEditor(null);
+        }
         if (this.root) {
             this.root.unmount();
             this.root = undefined;
@@ -245,6 +324,14 @@ export class BlueprintEditorWidget extends BaseWidget implements Saveable, Savea
                     </select>
                     <button type='button' onClick={() => this.undo()} disabled={this._undoStack.length === 0}>Undo</button>
                     <button type='button' onClick={() => this.redo()} disabled={this._redoStack.length === 0}>Redo</button>
+                    <button type='button' onClick={() => this.viewportApiRef.current?.zoomToFit()} title='Zoom to fit all nodes'>Fit</button>
+                    <button
+                        type='button'
+                        onClick={() => this.commandRegistry.executeCommand('blueprint-inspector:toggle')}
+                        title='Abrir panel de propiedades del nodo (Blueprint Inspector). Selecciona un nodo y haz clic aquí para editar nombre, eliminar o ver el .ozw vinculado.'
+                    >
+                        Inspector
+                    </button>
                 </div>
                 <div className='blueprint-editor-canvas-wrap'>
                     <BlueprintCanvas
@@ -252,14 +339,40 @@ export class BlueprintEditorWidget extends BaseWidget implements Saveable, Savea
                         selectedNodeId={this._selectedNodeId ?? undefined}
                         selectedEdgeId={this._selectedEdgeId ?? undefined}
                         layerFilter={this._layerFilter}
-                        onSelectNode={id => { this._selectedNodeId = id ?? undefined; this.update(); }}
-                        onSelectEdge={id => { this._selectedEdgeId = id ?? undefined; this.update(); }}
+                        onSelectNode={id => {
+                            this._selectedNodeId = id ?? undefined;
+                            this.blueprintSelectionService.setState(
+                                this._document,
+                                this._selectedNodeId ?? null,
+                                this._selectedEdgeId ?? null,
+                                this._uri?.toString() ?? null
+                            );
+                            if (id) {
+                                this.commandRegistry.executeCommand('blueprint-inspector:open');
+                            }
+                            this.update();
+                        }}
+                        onSelectEdge={id => {
+                            this._selectedEdgeId = id ?? undefined;
+                            this.blueprintSelectionService.setState(
+                                this._document,
+                                this._selectedNodeId ?? null,
+                                this._selectedEdgeId ?? null,
+                                this._uri?.toString() ?? null
+                            );
+                            if (id) {
+                                this.commandRegistry.executeCommand('blueprint-inspector:open');
+                            }
+                            this.update();
+                        }}
                         onDropNode={this.handleDropNode}
                         onMoveNode={this.handleMoveNode}
                         onDeleteNode={this.handleDeleteNode}
                         onCreateEdge={this.handleCreateEdge}
                         onDeleteEdge={this.handleDeleteEdge}
                         onRequestFocus={() => this.activate()}
+                        onNodeDoubleClick={this.handleNodeDoubleClick}
+                        viewportApiRef={this.viewportApiRef}
                     />
                 </div>
             </div>

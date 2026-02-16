@@ -10,11 +10,13 @@
 
 import * as React from '@theia/core/shared/react';
 import type { BlueprintDocument, BlueprintNode, BlueprintEdge, Position } from '../../domain/entities/blueprint-types';
+import { useViewportTransform } from './use-viewport-transform';
 
 const NODE_WIDTH = 160;
 const NODE_HEIGHT = 44;
 const GRID_SIZE = 20;
 const EDGE_HIT_WIDTH = 14;
+const CANVAS_SIZE = 8000;
 
 function snap(p: number): number {
     return Math.round(p / GRID_SIZE) * GRID_SIZE;
@@ -55,6 +57,11 @@ function findNodeAndNearestHandle(
     return undefined;
 }
 
+export interface ViewportApi {
+    zoomToFit: () => void;
+    centerViewAt: (worldX: number, worldY: number) => void;
+}
+
 export interface BlueprintCanvasProps {
     document: BlueprintDocument;
     selectedNodeId: string | undefined;
@@ -68,14 +75,18 @@ export interface BlueprintCanvasProps {
     onCreateEdge: (sourceNodeId: string, targetNodeId: string, targetHandle?: 'left' | 'right') => void;
     onDeleteEdge: (edgeId: string) => void;
     onRequestFocus: () => void;
+    /** Double-click on a node (e.g. open linked .ozw for menu/view/modal). */
+    onNodeDoubleClick?: (nodeId: string) => void;
+    /** Optional ref to get viewport actions (zoom to fit, center). */
+    viewportApiRef?: React.MutableRefObject<ViewportApi | null>;
 }
 
 export const BlueprintCanvas: React.FC<BlueprintCanvasProps> = props => {
     const { document: doc, selectedNodeId, selectedEdgeId, layerFilter } = props;
     // eslint-disable-next-line no-null/no-null -- React ref API uses null
     const containerRef = React.useRef<HTMLDivElement>(null);
-    const [pan] = React.useState({ x: 0, y: 0 });
-    const [scale] = React.useState(1);
+    const viewport = useViewportTransform(containerRef);
+    const { pan, scale, screenToWorld, handleWheelNative, startPan, endPan, onPanMove, centerViewAt, zoomToFit, isPanning, isSpacePressed } = viewport;
     const [draggingNode, setDraggingNode] = React.useState<string | undefined>(undefined);
     const [dragStart, setDragStart] = React.useState<{ nodePos: Position; clientX: number; clientY: number } | undefined>(undefined);
     /** When dragging from a node's output handle to create an edge */
@@ -106,16 +117,81 @@ export const BlueprintCanvas: React.FC<BlueprintCanvasProps> = props => {
 
     const nodeMap = new Map(doc.nodes.map(n => [n.id, n]));
 
-    const clientToGraph = (clientX: number, clientY: number): Position => {
+    const clientToGraph = React.useCallback((clientX: number, clientY: number): Position => {
+        const w = screenToWorld(clientX, clientY);
+        return { x: snap(w.x), y: snap(w.y) };
+    }, [screenToWorld]);
+
+    const handlePanAreaMouseDown = React.useCallback((e: React.MouseEvent): void => {
+        if (e.button === 0 || e.button === 1) {
+            startPan(e.clientX, e.clientY);
+        }
+    }, [startPan]);
+
+    const handleCanvasMouseDownCapture = React.useCallback((e: React.MouseEvent): void => {
+        if (isSpacePressed && e.button === 0) {
+            startPan(e.clientX, e.clientY);
+            e.preventDefault();
+            e.stopPropagation();
+        }
+    }, [isSpacePressed, startPan]);
+
+    const handleDoubleClickBackground = React.useCallback((e: React.MouseEvent): void => {
+        if ((e.target as HTMLElement).classList.contains('blueprint-canvas-background')) {
+            const w = screenToWorld(e.clientX, e.clientY);
+            centerViewAt(w.x, w.y);
+        }
+    }, [screenToWorld, centerViewAt]);
+
+    React.useEffect(() => {
         const el = containerRef.current;
         if (!el) {
-            return { x: 0, y: 0 };
+            return;
         }
-        const rect = el.getBoundingClientRect();
-        const x = (clientX - rect.left - pan.x) / scale;
-        const y = (clientY - rect.top - pan.y) / scale;
-        return { x: snap(x), y: snap(y) };
-    };
+        const onWheel = (e: WheelEvent): void => handleWheelNative(e);
+        el.addEventListener('wheel', onWheel, { passive: false });
+        return () => el.removeEventListener('wheel', onWheel);
+    }, [handleWheelNative]);
+
+    React.useEffect(() => {
+        if (!isPanning) {
+            return;
+        }
+        const onMouseMove = (e: MouseEvent): void => { onPanMove(e.clientX, e.clientY); };
+        const onMouseUp = (): void => { endPan(); };
+        window.addEventListener('mousemove', onMouseMove);
+        window.addEventListener('mouseup', onMouseUp);
+        return () => {
+            window.removeEventListener('mousemove', onMouseMove);
+            window.removeEventListener('mouseup', onMouseUp);
+        };
+    }, [isPanning, onPanMove, endPan]);
+
+    const bounds = React.useMemo(() => {
+        if (filteredNodes.length === 0) {
+            return { minX: 0, minY: 0, maxX: 400, maxY: 300 };
+        }
+        let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+        for (const n of filteredNodes) {
+            minX = Math.min(minX, n.position.x);
+            minY = Math.min(minY, n.position.y);
+            maxX = Math.max(maxX, n.position.x + NODE_WIDTH);
+            maxY = Math.max(maxY, n.position.y + NODE_HEIGHT);
+        }
+        return { minX, minY, maxX, maxY };
+    }, [filteredNodes]);
+
+    React.useEffect(() => {
+        const ref = props.viewportApiRef;
+        if (!ref) {
+            return;
+        }
+        ref.current = {
+            zoomToFit: () => zoomToFit(bounds),
+            centerViewAt
+        };
+        return () => { ref.current = null; };
+    }, [props.viewportApiRef, zoomToFit, centerViewAt, bounds]);
 
     const handleDrop = (e: React.DragEvent): void => {
         e.preventDefault();
@@ -227,12 +303,8 @@ export const BlueprintCanvas: React.FC<BlueprintCanvasProps> = props => {
             return;
         }
         const onMouseMove = (e: MouseEvent): void => {
-            const el = containerRef.current;
-            if (!el) { return; }
-            const rect = el.getBoundingClientRect();
-            const x = (e.clientX - rect.left - pan.x) / scale;
-            const y = (e.clientY - rect.top - pan.y) / scale;
-            const point = { x: snap(x), y: snap(y) };
+            const w = screenToWorld(e.clientX, e.clientY);
+            const point = { x: snap(w.x), y: snap(w.y) };
             const hit = findNodeAndNearestHandle(filteredNodes, point);
             if (hit && hit.node.id !== connectingFromNodeId) {
                 const handlePos = nodeHandlePosition(hit.node, hit.handle);
@@ -254,7 +326,7 @@ export const BlueprintCanvas: React.FC<BlueprintCanvasProps> = props => {
             window.removeEventListener('mousemove', onMouseMove);
             window.removeEventListener('mouseup', onMouseUp);
         };
-    }, [connectingFromNodeId, pan.x, pan.y, scale, filteredNodes]);
+    }, [connectingFromNodeId, screenToWorld, filteredNodes]);
 
     const handleKeyDown = (e: React.KeyboardEvent): void => {
         if (e.key === 'Delete') {
@@ -295,31 +367,47 @@ export const BlueprintCanvas: React.FC<BlueprintCanvasProps> = props => {
         return 'fa fa-circle';
     };
 
+    const transformStyle = { transform: `translate(${pan.x}px, ${pan.y}px) scale(${scale})` };
+
     return (
         <div
             ref={containerRef}
-            className='blueprint-canvas-container'
+            className={`blueprint-canvas-container ${isSpacePressed ? 'blueprint-canvas-container--pan-cursor' : ''} ${isPanning ? 'blueprint-canvas-container--grabbing' : ''}`}
             onDrop={handleDrop}
             onDragOver={handleDragOver}
             onDragEnter={handleDragEnter}
             onClick={() => { props.onRequestFocus(); props.onSelectNode(undefined); props.onSelectEdge(undefined); }}
             onMouseUp={handleCanvasMouseUp}
             onKeyDown={handleKeyDown}
+            onMouseDownCapture={handleCanvasMouseDownCapture}
             tabIndex={0}
+            style={{ overflow: 'hidden' }}
         >
             <div
                 className='blueprint-canvas-viewport'
                 onDrop={handleDrop}
                 onDragOver={handleDragOver}
                 onDragEnter={handleDragEnter}
-                style={{
-                    transform: `translate(${pan.x}px, ${pan.y}px) scale(${scale})`
-                }}
+                style={transformStyle}
             >
+                <div
+                    className='blueprint-canvas-background'
+                    onMouseDown={handlePanAreaMouseDown}
+                    onDoubleClick={handleDoubleClickBackground}
+                    data-canvas-background
+                />
+                <svg className='blueprint-canvas-grid' width={CANVAS_SIZE} height={CANVAS_SIZE}>
+                    <defs>
+                        <pattern id='blueprint-grid-pattern' width={GRID_SIZE} height={GRID_SIZE} patternUnits='userSpaceOnUse'>
+                            <path d={`M ${GRID_SIZE} 0 L 0 0 0 ${GRID_SIZE}`} fill='none' stroke='var(--theia-panel-border)' strokeWidth='0.5' />
+                        </pattern>
+                    </defs>
+                    <rect width='100%' height='100%' fill='url(#blueprint-grid-pattern)' />
+                </svg>
                 <svg
                     className='blueprint-canvas-edges'
-                    width={8000}
-                    height={8000}
+                    width={CANVAS_SIZE}
+                    height={CANVAS_SIZE}
                     style={{ position: 'absolute', left: 0, top: 0, pointerEvents: 'none' }}
                 >
                     <g style={{ pointerEvents: 'auto' }}>
@@ -378,10 +466,15 @@ export const BlueprintCanvas: React.FC<BlueprintCanvasProps> = props => {
                         })()}
                     </g>
                 </svg>
-                {filteredNodes.map(node => (
+                <div className='blueprint-canvas-nodes-layer' style={{ position: 'absolute', left: 0, top: 0, zIndex: 3 }}>
+                {filteredNodes.map(node => {
+                    const isOzwNode = ['menu', 'view', 'modal'].includes(node.type);
+                    const linkStatus = isOzwNode ? (node as { linkedResourceStatus?: string }).linkedResourceStatus : undefined;
+                    const linkClass = !isOzwNode ? '' : linkStatus === 'linked' ? 'blueprint-canvas-node--linked' : linkStatus === 'missing' ? 'blueprint-canvas-node--missing' : 'blueprint-canvas-node--unassigned';
+                    return (
                     <div
                         key={node.id}
-                        className={`blueprint-canvas-node ${node.type === 'app_router' ? 'blueprint-canvas-node--app-router' : ''} ${selectedNodeId === node.id ? 'selected' : ''}`}
+                        className={`blueprint-canvas-node ${node.type === 'app_router' ? 'blueprint-canvas-node--app-router' : ''} ${linkClass} ${selectedNodeId === node.id ? 'selected' : ''}`}
                         style={{
                             left: node.position.x,
                             top: node.position.y,
@@ -390,6 +483,11 @@ export const BlueprintCanvas: React.FC<BlueprintCanvasProps> = props => {
                         }}
                         onMouseDown={e => handleNodeMouseDown(e, node.id)}
                         onMouseUp={e => handleNodeMouseUp(e, node.id)}
+                        onClick={e => e.stopPropagation()}
+                        onDoubleClick={e => {
+                            e.stopPropagation();
+                            props.onNodeDoubleClick?.(node.id);
+                        }}
                     >
                         <div
                             className='blueprint-canvas-node-handle blueprint-canvas-node-handle--input'
@@ -405,7 +503,9 @@ export const BlueprintCanvas: React.FC<BlueprintCanvasProps> = props => {
                             onMouseDown={e => handleOutputHandleMouseDown(e, node.id)}
                         />
                     </div>
-                ))}
+                    );
+                })}
+                </div>
             </div>
         </div>
     );

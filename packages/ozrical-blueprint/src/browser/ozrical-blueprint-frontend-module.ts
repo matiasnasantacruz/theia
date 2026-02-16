@@ -18,7 +18,8 @@ import {
     UndoRedoHandler,
     ApplicationShell
 } from '@theia/core/lib/browser';
-import { CommandContribution, MenuContribution } from '@theia/core/lib/common';
+import { DialogProps } from '@theia/core/lib/browser/dialogs';
+import { Command, CommandContribution, CommandRegistry, MenuContribution } from '@theia/core/lib/common';
 import { bindViewContribution, AbstractViewContribution } from '@theia/core/lib/browser/shell/view-contribution';
 import URI from '@theia/core/lib/common/uri';
 import { FileService } from '@theia/filesystem/lib/browser/file-service';
@@ -29,6 +30,15 @@ import { BlueprintOpenHandler } from './blueprint-open-handler';
 import { BlueprintToolboxViewContribution } from './blueprint-toolbox-contribution';
 import { BlueprintNewCommandContribution } from './blueprint-new-command';
 import { BlueprintSerializer } from '../infrastructure/storage/blueprint-serializer';
+import { OzwResourceProvider } from './services/ozw-resource-provider';
+import { BlueprintSelectionService } from './services/blueprint-selection-service';
+import { BlueprintEditorRefService } from './services/blueprint-editor-ref-service';
+import { OzwResourcePickerDialog } from './dialogs/ozw-resource-picker-dialog';
+
+export const BlueprintInspectorOpenCommand: Command = {
+    id: 'blueprint-inspector:open',
+    label: 'Open Blueprint Inspector'
+};
 
 @injectable()
 class BlueprintInspectorViewContribution extends AbstractViewContribution<BlueprintInspectorWidget> {
@@ -42,6 +52,13 @@ class BlueprintInspectorViewContribution extends AbstractViewContribution<Bluepr
             },
             toggleCommandId: 'blueprint-inspector:toggle',
             toggleKeybinding: 'ctrlcmd+shift+i'
+        });
+    }
+
+    override registerCommands(commands: CommandRegistry): void {
+        super.registerCommands(commands);
+        commands.registerCommand(BlueprintInspectorOpenCommand, {
+            execute: () => this.openView({ reveal: true })
         });
     }
 }
@@ -73,6 +90,16 @@ class BlueprintUndoRedoHandler implements UndoRedoHandler<BlueprintEditorWidget>
 
 export default new ContainerModule(bind => {
     bind(BlueprintSerializer).toSelf().inSingletonScope();
+    bind(OzwResourceProvider).toSelf().inSingletonScope();
+    bind(BlueprintSelectionService).toSelf().inSingletonScope();
+    bind(BlueprintEditorRefService).toSelf().inSingletonScope();
+    bind(OzwResourcePickerDialog).toDynamicValue(ctx => {
+        const fileService = ctx.container.get(FileService);
+        return new OzwResourcePickerDialog(
+            { title: 'Vincular menú a vista OZW' } as DialogProps,
+            fileService
+        );
+    }).inSingletonScope();
 
     bind(BlueprintEditorWidget).toSelf().inTransientScope();
     bind(WidgetFactory).toDynamicValue(ctx => ({

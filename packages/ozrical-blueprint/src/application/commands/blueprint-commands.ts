@@ -37,6 +37,12 @@ export interface MoveNodeCommand {
     position: Position;
 }
 
+export interface UpdateNodeCommand {
+    kind: 'UpdateNode';
+    nodeId: string;
+    patch: { label?: string; resourceId?: string; route?: string; linkedResourceStatus?: string };
+}
+
 export interface CreateEdgeCommand {
     kind: 'CreateEdge';
     sourceNodeId: string;
@@ -76,6 +82,7 @@ export type BlueprintCommand =
     | CreateNodeCommand
     | DeleteNodeCommand
     | MoveNodeCommand
+    | UpdateNodeCommand
     | CreateEdgeCommand
     | DeleteEdgeCommand
     | EditAccessGateCommand
@@ -116,6 +123,17 @@ export function applyCommand(doc: BlueprintDocument, cmd: BlueprintCommand, idGe
             const n = next.nodes.find(x => x.id === cmd.nodeId);
             if (n) {
                 n.position = { ...cmd.position };
+            }
+            return next;
+        }
+        case 'UpdateNode': {
+            const node = next.nodes.find(x => x.id === cmd.nodeId);
+            if (node) {
+                if (cmd.patch.label !== undefined) { node.label = cmd.patch.label; }
+                const n = node as unknown as Record<string, unknown>;
+                if (cmd.patch.resourceId !== undefined) { n.resourceId = cmd.patch.resourceId; }
+                if (cmd.patch.route !== undefined) { n.route = cmd.patch.route; }
+                if (cmd.patch.linkedResourceStatus !== undefined) { n.linkedResourceStatus = cmd.patch.linkedResourceStatus; }
             }
             return next;
         }

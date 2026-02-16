@@ -67,8 +67,41 @@ export interface BlueprintNodeStateInjection extends BlueprintNodeBase {
     defaultValue?: unknown;
 }
 
+/** Link status for menu/view/modal nodes that reference an .ozw file */
+export type LinkedResourceStatus = 'linked' | 'missing' | 'unassigned';
+
+/** Menu node: instance of a view; must reference an OZW file (.ozw). */
+export interface BlueprintNodeMenu extends BlueprintNodeBase {
+    type: 'menu';
+    /** Path relative to workspace root (e.g. views/clientes.ozw) */
+    resourceId?: string;
+    /** Navigation route (e.g. /app/clientes). Derived from resourceId if not set. */
+    route?: string;
+    /** Whether the linked .ozw file exists and is valid */
+    linkedResourceStatus?: LinkedResourceStatus;
+}
+
+/** View node: screen/view that can reference an OZW file. */
+export interface BlueprintNodeView extends BlueprintNodeBase {
+    type: 'view';
+    resourceId?: string;
+    route?: string;
+    linkedResourceStatus?: LinkedResourceStatus;
+}
+
+/** Modal node: modal dialog that can reference an OZW file. */
+export interface BlueprintNodeModal extends BlueprintNodeBase {
+    type: 'modal';
+    resourceId?: string;
+    route?: string;
+    linkedResourceStatus?: LinkedResourceStatus;
+}
+
 export type BlueprintNode =
     | BlueprintNodeBase
+    | BlueprintNodeMenu
+    | BlueprintNodeView
+    | BlueprintNodeModal
     | BlueprintNodeAccessGate
     | BlueprintNodeAccessContext
     | BlueprintNodeConnector

@@ -34,15 +34,47 @@
     overflow: hidden;
     position: relative;
     background: var(--theia-editor-background);
+    cursor: default;
+}
+
+.blueprint-canvas-container.blueprint-canvas-container--pan-cursor {
+    cursor: grab;
+}
+
+.blueprint-canvas-container.blueprint-canvas-container--grabbing {
+    cursor: grabbing;
 }
 
 .blueprint-canvas-viewport {
     transform-origin: 0 0;
     position: absolute;
-    min-width: 8000px;
-    min-height: 8000px;
     left: 0;
     top: 0;
+    min-width: 8000px;
+    min-height: 8000px;
+    will-change: transform;
+}
+
+.blueprint-canvas-background {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 8000px;
+    height: 8000px;
+    z-index: 0;
+    cursor: inherit;
+}
+
+.blueprint-canvas-grid {
+    position: absolute;
+    left: 0;
+    top: 0;
+    z-index: 1;
+    pointer-events: none;
+}
+
+.blueprint-canvas-edges {
+    z-index: 2;
 }
 
 .blueprint-canvas-node {
@@ -171,4 +203,162 @@
     margin: 0;
     font-size: 11px;
     color: var(--theia-descriptionForeground);
+}
+
+.blueprint-inspector-node-type {
+    margin: 0 0 8px 0;
+    font-size: 12px;
+    color: var(--theia-descriptionForeground);
+}
+
+.blueprint-inspector-node-props {
+    margin-top: 8px;
+}
+
+.blueprint-inspector-prop {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    margin-bottom: 10px;
+}
+
+.blueprint-inspector-prop-label {
+    font-size: 11px;
+    text-transform: uppercase;
+    color: var(--theia-descriptionForeground);
+}
+
+.blueprint-inspector-prop-value {
+    font-size: 12px;
+    word-break: break-all;
+    white-space: normal;
+}
+
+.blueprint-inspector-status {
+    font-size: 12px;
+    font-weight: 500;
+}
+
+.blueprint-inspector-status--linked {
+    color: var(--theia-badge-background);
+}
+
+.blueprint-inspector-status--missing {
+    color: var(--theia-errorForeground);
+}
+
+.blueprint-inspector-status--unassigned {
+    color: var(--theia-descriptionForeground);
+}
+
+.blueprint-inspector-node-props .theia-button {
+    margin-top: 4px;
+}
+
+/* OZW Resource Picker (Linker Wizard) */
+.ozw-resource-picker-dialog {
+    min-width: 360px;
+    max-width: 480px;
+    min-height: 280px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+}
+
+.ozw-resource-picker-search {
+    flex-shrink: 0;
+}
+
+.ozw-resource-picker-search input {
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.ozw-resource-picker-list {
+    min-height: 160px;
+    max-height: 240px;
+    overflow-y: auto;
+    overflow-x: hidden;
+    border: 1px solid var(--theia-panel-border);
+    border-radius: 4px;
+    background: var(--theia-editor-background);
+    flex-shrink: 1;
+}
+
+.ozw-resource-picker-item {
+    padding: 8px 12px;
+    cursor: pointer;
+    border-bottom: 1px solid var(--theia-panel-border);
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.ozw-resource-picker-item:last-child {
+    border-bottom: none;
+}
+
+.ozw-resource-picker-item:hover {
+    background: var(--theia-list-hoverBackground);
+}
+
+.ozw-resource-picker-item.selected {
+    background: var(--theia-list-activeSelectionBackground);
+    color: var(--theia-list-activeSelectionForeground);
+}
+
+.ozw-resource-picker-item-label {
+    word-break: break-word;
+    white-space: normal;
+}
+
+.ozw-resource-picker-item-path {
+    font-size: 11px;
+    opacity: 0.85;
+    word-break: break-all;
+    white-space: normal;
+}
+
+.ozw-resource-picker-empty {
+    padding: 16px;
+    text-align: center;
+    color: var(--theia-descriptionForeground);
+    font-size: 12px;
+}
+
+.ozw-resource-picker-actions {
+    display: flex;
+    justify-content: flex-start;
+}
+
+.ozw-resource-picker-create {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.ozw-resource-picker-create label {
+    font-size: 12px;
+}
+
+.ozw-resource-picker-create-actions {
+    display: flex;
+    gap: 8px;
+}
+
+/* Menu/View/Modal node link status on canvas */
+.blueprint-canvas-node--linked {
+    border-color: var(--theia-badge-background);
+}
+
+.blueprint-canvas-node--missing {
+    border-color: var(--theia-errorForeground);
+    background: color-mix(in srgb, var(--theia-errorForeground) 12%, var(--theia-editor-background));
+}
+
+.blueprint-canvas-node--unassigned {
+    border-style: dashed;
+    opacity: 0.9;
 }

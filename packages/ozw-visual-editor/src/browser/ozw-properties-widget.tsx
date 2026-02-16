@@ -453,7 +453,9 @@ export class OzwPropertiesWidget extends BaseWidget {
     ): React.ReactNode[] {
         const children: React.ReactNode[] = [];
         children.push(...this.renderAlignControls(type, { alwaysShow: false }));
-        children.push(...appearanceFields.map(f => this.renderField(type, defaults, f, { hideDefaults: true })));
+        // For 'text' (and any type with explicit appearance fields), always show controls so the user can change font size etc.
+        const hideDefaults = type !== 'text';
+        children.push(...appearanceFields.map(f => this.renderField(type, defaults, f, { hideDefaults })));
         if (children.filter(Boolean).length === 0) {
             children.push(<div key="appearance-hint" className='ozw-properties-hint'>Sin ajustes de apariencia.</div>);
         }
